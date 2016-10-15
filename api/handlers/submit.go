@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"gopkg.in/mgo.v2"
-	"github.com/acoustid/api/chromaprint"
+	"github.com/acoustid/go-backend/chromaprint"
 )
 
 type SubmitHandler struct {
