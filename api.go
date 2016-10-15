@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
+	"github.com/acoustid/api/handlers"
+	"gopkg.in/mgo.v2"
 	"log"
 	"net/http"
-	"gopkg.in/mgo.v2"
-	"github.com/acoustid/api/handlers"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	}
 	defer session.Close()
 
-	http.HandleFunc("/", func (w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Nothing to see here.\n")
 	})
 
