@@ -1,15 +1,15 @@
 package chromaprint
 
 import (
-	"errors"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 )
 
 // Fingerprint contains raw fingerprint data
 type Fingerprint struct {
 	Version int
-	Hashes []uint32
+	Hashes  []uint32
 }
 
 // DecodeFingerprintString decodes base64-encoded fingerprint string into binary data.
@@ -43,8 +43,8 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 	header := binary.BigEndian.Uint32(data)
 	offset := 4
 
-	version := int((header>>24)&0xff)
-	totalValues := int(header&0xffffff)
+	version := int((header >> 24) & 0xff)
+	totalValues := int(header & 0xffffff)
 
 	if totalValues == 0 {
 		return nil, errors.New("empty fingerprint")
@@ -58,7 +58,7 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 			numValues += 1
 			if numValues == totalValues {
 				bits = bits[:bi+1]
-				offset += (len(bits) * 3 + 8) / 8
+				offset += (len(bits)*3 + 8) / 8
 				break
 			}
 		} else if bit == 7 {
@@ -96,11 +96,11 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 			hi += 1
 		} else {
 			lastBit += bit
-			hashes[hi] |= 1<<uint(lastBit-1)
+			hashes[hi] |= 1 << uint(lastBit-1)
 		}
 	}
 
-	return &Fingerprint{ Version: version, Hashes: hashes }, nil
+	return &Fingerprint{Version: version, Hashes: hashes}, nil
 }
 
 func ValidateFingerprintString(str string) bool {

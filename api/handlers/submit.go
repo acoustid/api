@@ -1,14 +1,14 @@
 package handlers
 
 import (
-	"log"
 	"fmt"
-	"strings"
-	"strconv"
+	"github.com/acoustid/go-acoustid/chromaprint"
+	"gopkg.in/mgo.v2"
+	"log"
 	"net/http"
 	"net/url"
-	"gopkg.in/mgo.v2"
-	"github.com/acoustid/go-backend/chromaprint"
+	"strconv"
+	"strings"
 )
 
 type SubmitHandler struct {
@@ -17,21 +17,21 @@ type SubmitHandler struct {
 
 type SubmitResponse struct {
 	XMLName struct{} `json:"-" xml:"response"`
-	Status string `json:"status" xml:"status"`
+	Status  string   `json:"status" xml:"status"`
 }
 
 type Submission struct {
-	Id string `bson:"_id,omitempty"`
-	Duration int
+	Id          string `bson:"_id,omitempty"`
+	Duration    int
 	Fingerprint []byte
-	MBID string `bson:",omitempty"`
-	Title string `bson:",omitempty"`
-	Artist string `bson:",omitempty"`
-	Album string `bson:",omitempty"`
+	MBID        string `bson:",omitempty"`
+	Title       string `bson:",omitempty"`
+	Artist      string `bson:",omitempty"`
+	Album       string `bson:",omitempty"`
 	AlbumArtist string `bson:",omitempty"`
-	Year int `bson:",omitempty"`
-	TrackNo int `bson:",omitempty"`
-	DiscNo int `bson:",omitempty"`
+	Year        int    `bson:",omitempty"`
+	TrackNo     int    `bson:",omitempty"`
+	DiscNo      int    `bson:",omitempty"`
 }
 
 func parseSubmission(values url.Values, suffix string) (*Submission, error) {
@@ -58,11 +58,11 @@ func parseSubmission(values url.Values, suffix string) (*Submission, error) {
 
 	submission := &Submission{
 		Fingerprint: fingerprint,
-		Duration: int(duration),
-		MBID: values.Get("mbid" + suffix),
-		Title: values.Get("track" + suffix),
-		Artist: values.Get("artist" + suffix),
-		Album: values.Get("album" + suffix),
+		Duration:    int(duration),
+		MBID:        values.Get("mbid" + suffix),
+		Title:       values.Get("track" + suffix),
+		Artist:      values.Get("artist" + suffix),
+		Album:       values.Get("album" + suffix),
 		AlbumArtist: values.Get("albumartist" + suffix),
 	}
 
@@ -103,7 +103,7 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseForm()
 
-	format, err := parseResponseFormat(r.Form, JsonFormat | XmlFormat)
+	format, err := parseResponseFormat(r.Form, JsonFormat|XmlFormat)
 	if err != nil {
 		WriteResponse(w, http.StatusBadRequest, NewErrorResponse(err.Error(), 1), JsonFormat)
 		return
@@ -127,5 +127,5 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteResponse(w, http.StatusOK, SubmitResponse{ Status: "ok" }, format)
+	WriteResponse(w, http.StatusOK, SubmitResponse{Status: "ok"}, format)
 }

@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"fmt"
-	"net/http"
 	"gopkg.in/mgo.v2"
+	"net/http"
 )
 
 type LookupHandler struct {
@@ -22,7 +22,7 @@ func (h *LookupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.ParseForm()
 
-	format, err := parseResponseFormat(r.Form, JsonFormat | XmlFormat)
+	format, err := parseResponseFormat(r.Form, JsonFormat|XmlFormat)
 	if err != nil {
 		fmt.Fprintf(w, "%s", err)
 		return

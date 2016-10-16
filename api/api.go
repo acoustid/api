@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/acoustid/go-backend/api/handlers"
+	"github.com/acoustid/go-acoustid/api/handlers"
 	"gopkg.in/mgo.v2"
 	"log"
 	"net/http"

@@ -1,40 +1,46 @@
 package index
 
 import (
-	"net/http"
 	"encoding/json"
-	"strconv"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"strconv"
 )
 
 type context struct {
 	idx *Index
 }
 
-type indexHandler struct { context }
-type statsHandler struct { context }
+type indexHandler struct{ context }
+type statsHandler struct{ context }
 
 func (h *indexHandler) ServeGET(w http.ResponseWriter, r *http.Request) {
 	type Response struct {
 		Status string `json:"status"`
 	}
-	response := &Response{ Status: "ok" }
+	response := &Response{Status: "ok"}
 	writeResponse(w, http.StatusOK, response)
 }
 
 func (h *indexHandler) ServePOST(w http.ResponseWriter, r *http.Request) {
 	type Doc struct {
-		ID uint32 `json:"id"`
+		ID     uint32   `json:"id"`
 		Hashes []uint32 `json:"hashes"`
 	}
 	type Request struct {
 		Docs []Doc `json:"docs"`
 	}
 
-	decoder := json.NewDecoder(r.Body)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "error reading request body")
+		return
+	}
+	r.Body.Close()
 
 	var req Request
-	err := decoder.Decode(&req)
+	err = json.Unmarshal(body, &req)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -63,7 +69,7 @@ func (h *indexHandler) ServePOST(w http.ResponseWriter, r *http.Request) {
 	type Response struct {
 		Status string `json:"status"`
 	}
-	response := &Response{ Status: "ok" }
+	response := &Response{Status: "ok"}
 	writeResponse(w, http.StatusOK, response)
 }
 
@@ -71,7 +77,7 @@ func (h *indexHandler) ServeDELETE(w http.ResponseWriter, r *http.Request) {
 	type Response struct {
 		Status string `json:"status"`
 	}
-	response := &Response{ Status: "ok" }
+	response := &Response{Status: "ok"}
 	writeResponse(w, http.StatusOK, response)
 }
 
@@ -90,7 +96,7 @@ func (h *indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *statsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	type Response struct {
-		NumDocs int `json:"num_docs"`
+		NumDocs     int `json:"num_docs"`
 		NumSegments int `json:"num_segments"`
 	}
 	response := &Response{}
@@ -112,14 +118,15 @@ func writeResponse(w http.ResponseWriter, status int, response interface{}) {
 }
 
 func writeErrorResponse(w http.ResponseWriter, status int, message string) {
-	response := map[string]string{ "message": message }
+	response := map[string]string{"message": message}
 	writeResponse(w, status, response)
 }
 
 func ListenAndServe(addr string, idx *Index) error {
-	context := context{ idx: idx }
+	context := context{idx: idx}
 	mux := http.NewServeMux()
-	mux.Handle("/index", &indexHandler{ context: context })
-	mux.Handle("/stats", &statsHandler{ context: context })
+	mux.Handle("/index", &indexHandler{context: context})
+	mux.Handle("/stats", &statsHandler{context: context})
+	log.Printf("listening on %v", addr)
 	return http.ListenAndServe(addr, mux)
 }

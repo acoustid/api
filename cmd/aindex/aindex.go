@@ -2,16 +2,16 @@ package main
 
 import (
 	"flag"
+	"github.com/acoustid/go-acoustid/index"
 	"log"
-	"github.com/acoustid/go-backend/index"
 )
 
 func main() {
+	bind := flag.String("bind", "localhost:7765", "port number on which to listen")
 	dirFlag := flag.String("dir", "index_data", "path to the database directory")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	log.Printf("Hello world %s", *dirFlag)
 
 	idx, err := index.Open(*dirFlag)
 	if err != nil {
@@ -19,5 +19,5 @@ func main() {
 	}
 	defer idx.Close()
 
-	log.Fatal(index.ListenAndServe(":8080", idx))
+	log.Fatal(index.ListenAndServe(*bind, idx))
 }

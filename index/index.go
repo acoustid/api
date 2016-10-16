@@ -1,32 +1,32 @@
 package index
 
 import (
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/cznic/sortutil"
+	"github.com/dchest/safefile"
 	"log"
 	"os"
-	"sync"
-	"errors"
-	"github.com/cznic/sortutil"
-	"sort"
-	"encoding/binary"
-	"fmt"
 	"path"
-	"sync/atomic"
-	"encoding/json"
-	"github.com/dchest/safefile"
-	"time"
 	"path/filepath"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type IndexState struct {
-	TXID     uint32 `json:"txid"`
+	TXID     uint32   `json:"txid"`
 	Segments []uint32 `json:"segments"`
 }
 
 type Index struct {
-	Path      string
-	lock      sync.Mutex
-	txid      uint32
-	state     IndexState
+	Path  string
+	lock  sync.Mutex
+	txid  uint32
+	state IndexState
 
 	BlockSize int
 }
@@ -77,7 +77,7 @@ func (idx *Index) stateFileName() string {
 
 func (idx *Index) newState() IndexState {
 	state := IndexState{
-		TXID: atomic.AddUint32(&idx.txid, 1),
+		TXID:     atomic.AddUint32(&idx.txid, 1),
 		Segments: idx.state.Segments,
 	}
 	log.Printf("started new transaction %v", state.TXID)
@@ -85,11 +85,11 @@ func (idx *Index) newState() IndexState {
 }
 
 func (idx *Index) addSegment(segment *Segment) error {
-//	segments := make([]uint32, len(state.Segments), len(state.Segments) + 1)
+	//	segments := make([]uint32, len(state.Segments), len(state.Segments) + 1)
 	//copy(segments, state.Segments)
 	//state.Segments = append(state.Segments, state.TXID)
 
-//	idx.commitState(state)
+	//	idx.commitState(state)
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 	ptr := 4
 	prevHash := uint32(0)
 	for _, hash := range hashes {
-		if ptr + binary.MaxVarintLen32 + binary.MaxVarintLen32 < len(buf) {
+		if ptr+binary.MaxVarintLen32+binary.MaxVarintLen32 < len(buf) {
 			binary.LittleEndian.PutUint32(buf[:4], uint32(ptr))
 			file.Write(buf[:ptr])
 			segment.meta.Size += ptr
@@ -162,9 +162,9 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 			prevHash = 0
 		}
 		if ptr == 4 {
-			segment.AddBlock(BlockInfo{ FirstHash: hash, Position: segment.meta.Size })
+			segment.AddBlock(BlockInfo{FirstHash: hash, Position: segment.meta.Size})
 		}
-		ptr += binary.PutUvarint(buf[ptr:], uint64(hash - prevHash))
+		ptr += binary.PutUvarint(buf[ptr:], uint64(hash-prevHash))
 		ptr += binary.PutUvarint(buf[ptr:], uint64(id))
 		prevHash = hash
 		segment.meta.Checksum += uint64(hash)<<32 | uint64(id)

@@ -2,9 +2,9 @@ package index
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
-	"log"
 )
 
 type SegmentMeta struct {
@@ -26,7 +26,7 @@ type BlockInfo struct {
 }
 
 type Segment struct {
-	meta SegmentMeta
+	meta   SegmentMeta
 	blocks []BlockInfo
 }
 
@@ -51,7 +51,7 @@ func (s *Segment) DataFilename() string {
 }
 
 func (s *Segment) RemoveFiles(dir string) {
-	names := []string {
+	names := []string{
 		path.Join(dir, s.MetaFilename()),
 		path.Join(dir, s.DataFilename()),
 	}

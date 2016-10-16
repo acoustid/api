@@ -1,22 +1,22 @@
 package handlers
 
 import (
-	"fmt"
-	"net/url"
-	"net/http"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
+	"net/http"
+	"net/url"
 )
 
 type ErrorResponse struct {
-	XMLName struct{} `json:"-" xml:"response"`
-	Status string `json:"status" xml:"status"`
-	Error ErrorDetails `json:"error" xml:"error"`
+	XMLName struct{}     `json:"-" xml:"response"`
+	Status  string       `json:"status" xml:"status"`
+	Error   ErrorDetails `json:"error" xml:"error"`
 }
 
 type ErrorDetails struct {
 	Message string `json:"message" xml:"message"`
-	Code int `json:"code" xml:"code"`
+	Code    int    `json:"code" xml:"code"`
 }
 
 func NewErrorResponse(message string, code int) interface{} {
@@ -24,7 +24,7 @@ func NewErrorResponse(message string, code int) interface{} {
 		Status: "error",
 		Error: ErrorDetails{
 			Message: message,
-			Code: code,
+			Code:    code,
 		},
 	}
 }
@@ -58,18 +58,18 @@ type ResponseFormat int
 
 const (
 	UnknownFormat ResponseFormat = 0
-	JsonFormat = 1 << iota
+	JsonFormat                   = 1 << iota
 	JsonpFormat
 	XmlFormat
 )
 
 func parseResponseFormat(values url.Values, allowed ResponseFormat) (ResponseFormat, error) {
 	format := values.Get("format")
-	if (format == "" || format == "json") && (JsonFormat & allowed != 0) {
+	if (format == "" || format == "json") && (JsonFormat&allowed != 0) {
 		return JsonFormat, nil
-	} else if format == "jsonp" && (JsonpFormat & allowed != 0) {
+	} else if format == "jsonp" && (JsonpFormat&allowed != 0) {
 		return JsonpFormat, nil
-	} else if format == "xml" && (XmlFormat & allowed != 0) {
+	} else if format == "xml" && (XmlFormat&allowed != 0) {
 		return XmlFormat, nil
 	} else {
 		return UnknownFormat, fmt.Errorf("unknown format %s", format)
