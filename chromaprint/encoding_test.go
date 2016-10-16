@@ -111,6 +111,21 @@ func TestValidateFingerprintString(t *testing.T) {
 	assert.True(t, ValidateFingerprintString("AQAAEwkjrUmSJQpUHflR9mjSJMdZpcO_Imdw9dCO9Clu4_wQPvhCB01w6xAtXNcAp5RASgDBhDSCGGIAcwA"))
 }
 
+func ExampleDecodeFingerprintString() {
+	input := "AQAAA5IULYmZJCgcNwcC"
+	bytes, err := DecodeFingerprintString(input)
+	if err == nil {
+		fmt.Println(bytes)
+	}
+	// Output: [1 0 0 3 146 20 45 137 153 36 40 28 55 7 2]
+}
+
+func ExampleEncodeFingerprintToString() {
+	bytes := []byte{1, 0, 0, 3, 146, 20, 45, 137, 153, 36, 40, 28, 55, 7, 2}
+	fmt.Println(EncodeFingerprintToString(bytes))
+	// Output: AQAAA5IULYmZJCgcNwcC
+}
+
 func ExampleValidateFingerprint() {
 	input := []byte{1, 0, 0, 3, 146, 20, 45, 137, 153, 36, 40, 28, 55, 7, 2}
 	fmt.Println(ValidateFingerprint(input))
@@ -121,4 +136,28 @@ func ExampleValidateFingerprintString() {
 	input := "AQAAA5IULYmZJCgcNwcC"
 	fmt.Println(ValidateFingerprintString(input))
 	// Output: true
+}
+
+func ExampleParseFingerprint() {
+	input := []byte{1, 0, 0, 3, 146, 20, 45, 137, 153, 36, 40, 28, 55, 7, 2}
+	fp, err := ParseFingerprint(input)
+	if err == nil {
+		fmt.Println(fp.Version)
+		fmt.Println(fp.Hashes)
+	}
+	// Output:
+	// 1
+	// [2084693418 2084693434 1950873050]
+}
+
+func ExampleParseFingerprintString() {
+	input := "AQAAA5IULYmZJCgcNwcC"
+	fp, err := ParseFingerprintString(input)
+	if err == nil {
+		fmt.Println(fp.Version)
+		fmt.Println(fp.Hashes)
+	}
+	// Output:
+	// 1
+	// [2084693418 2084693434 1950873050]
 }

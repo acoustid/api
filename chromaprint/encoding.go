@@ -19,7 +19,7 @@ type Fingerprint struct {
 // DecodeFingerprintString decodes base64-encoded fingerprint string into binary data.
 func DecodeFingerprintString(str string) ([]byte, error) {
 	if len(str) == 0 {
-		return nil, errors.New("fingerprint string can't be empty")
+		return nil, ErrInvalidFingerprint
 	}
 	return base64.RawURLEncoding.DecodeString(str)
 }
@@ -32,7 +32,7 @@ func EncodeFingerprintToString(data []byte) string {
 // ParseFingerprint reads binary fingerprint data and returns a parsed Fingerprint structure.
 func ParseFingerprint(data []byte) (*Fingerprint, error) {
 	var fp Fingerprint
-	err := parseFingerprint(data, &fp)
+	err := unpackFingerprint(data, &fp)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func ParseFingerprintString(str string) (*Fingerprint, error) {
 
 // ValidateFingerprint returns true if the input data is a valid fingerprint.
 func ValidateFingerprint(data []byte) bool {
-	err := parseFingerprint(data, nil)
+	err := unpackFingerprint(data, nil)
 	return err == nil
 }
 
@@ -63,7 +63,7 @@ func ValidateFingerprintString(str string) bool {
 	return ValidateFingerprint(data)
 }
 
-func parseFingerprint(data []byte, fp *Fingerprint) error {
+func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	if len(data) < 4 {
 		return ErrInvalidFingerprint
 	}
@@ -112,27 +112,25 @@ func parseFingerprint(data []byte, fp *Fingerprint) error {
 		}
 	}
 
-	if fp == nil {
-		return nil
-	}
-
-	hashes := make([]uint32, totalValues)
-	hi := 0
-	lastBit := int8(0)
-	for _, bit := range bits {
-		if bit == 0 {
-			if hi > 0 {
-				hashes[hi] ^= hashes[hi-1]
+	if fp != nil {
+		hashes := make([]uint32, totalValues)
+		hi := 0
+		lastBit := int8(0)
+		for _, bit := range bits {
+			if bit == 0 {
+				if hi > 0 {
+					hashes[hi] ^= hashes[hi-1]
+				}
+				lastBit = 0
+				hi += 1
+			} else {
+				lastBit += bit
+				hashes[hi] |= 1 << uint(lastBit-1)
 			}
-			lastBit = 0
-			hi += 1
-		} else {
-			lastBit += bit
-			hashes[hi] |= 1 << uint(lastBit-1)
 		}
+		fp.Version = version
+		fp.Hashes = hashes
 	}
 
-	fp.Version = version
-	fp.Hashes = hashes
 	return nil
 }
