@@ -27,6 +27,16 @@ func TestUnpackInt5Array(t *testing.T) {
 	assert.Equal(t,	[]int{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 },	unpackInt5Array([]byte{ 0x41, 0x0c, 0x52, 0xcc, 0x41, 0x49, 0x2d, 0x6 }))
 }
 
+func BenchmarkUnpackInt3Array(b *testing.B) {
+	data := make([]byte, 1024)
+	for n := 0; n < b.N; n++ {
+		for i := range data {
+			data[i] = byte(rand.Uint32() & 0xff)
+		}
+		unpackInt3Array(data)
+	}
+}
+
 func BenchmarkUnpackInt5Array(b *testing.B) {
 	data := make([]byte, 1024)
 	for n := 0; n < b.N; n++ {
