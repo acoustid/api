@@ -6,6 +6,10 @@ import (
 	"errors"
 )
 
+var (
+	ErrInvalidFingerprint = errors.New("invalid fingerprint")
+)
+
 // Fingerprint contains raw fingerprint data.
 type Fingerprint struct {
 	Version int      // version of the algorithm that generated the fingerprint
@@ -25,6 +29,16 @@ func EncodeFingerprintToString(data []byte) string {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
+// ParseFingerprint reads binary fingerprint data and returns a parsed Fingerprint structure.
+func ParseFingerprint(data []byte) (*Fingerprint, error) {
+	var fp Fingerprint
+	err := parseFingerprint(data, &fp)
+	if err != nil {
+		return nil, err
+	}
+	return &fp, nil
+}
+
 // ParseFingerprintString reads base64-encoded fingerprint string and returns a parsed Fingerprint structure.
 func ParseFingerprintString(str string) (*Fingerprint, error) {
 	data, err := DecodeFingerprintString(str)
@@ -34,10 +48,24 @@ func ParseFingerprintString(str string) (*Fingerprint, error) {
 	return ParseFingerprint(data)
 }
 
-// ParseFingerprint reads binary fingerprint data and returns a parsed Fingerprint structure.
-func ParseFingerprint(data []byte) (*Fingerprint, error) {
+// ValidateFingerprint returns true if the input data is a valid fingerprint.
+func ValidateFingerprint(data []byte) bool {
+	err := parseFingerprint(data, nil)
+	return err == nil
+}
+
+// ValidateFingerprintString returns true if the input string is a valid base64-encoded fingerprint.
+func ValidateFingerprintString(str string) bool {
+	data, err := DecodeFingerprintString(str)
+	if err != nil {
+		return false
+	}
+	return ValidateFingerprint(data)
+}
+
+func parseFingerprint(data []byte, fp *Fingerprint) error {
 	if len(data) < 4 {
-		return nil, errors.New("missing fingerprint header")
+		return ErrInvalidFingerprint
 	}
 
 	header := binary.BigEndian.Uint32(data)
@@ -47,7 +75,7 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 	totalValues := int(header & 0xffffff)
 
 	if totalValues == 0 {
-		return nil, errors.New("empty fingerprint")
+		return ErrInvalidFingerprint
 	}
 
 	bits := unpackInt3Array(data[offset:])
@@ -67,13 +95,13 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 	}
 
 	if numValues != totalValues {
-		return nil, errors.New("missing fingerprint data (normal bits)")
+		return ErrInvalidFingerprint
 	}
 
 	if numExceptionalBits > 0 {
 		exceptionalBits := unpackInt5Array(data[offset:])
 		if len(exceptionalBits) != numExceptionalBits {
-			return nil, errors.New("missing fingerprint data (exceptional bits)")
+			return ErrInvalidFingerprint
 		}
 		ei := 0
 		for bi, bit := range bits {
@@ -82,6 +110,10 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 				ei += 1
 			}
 		}
+	}
+
+	if fp == nil {
+		return nil
 	}
 
 	hashes := make([]uint32, totalValues)
@@ -100,17 +132,7 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 		}
 	}
 
-	return &Fingerprint{Version: version, Hashes: hashes}, nil
-}
-
-// ValidateFingerprintString returns true if the input string is a valid base64-encoded fingerprint.
-func ValidateFingerprintString(str string) bool {
-	_, err := ParseFingerprintString(str)
-	return err == nil
-}
-
-// ValidateFingerprint returns true if the input data is a valid fingerprint.
-func ValidateFingerprint(data []byte) bool {
-	_, err := ParseFingerprint(data)
-	return err == nil
+	fp.Version = version
+	fp.Hashes = hashes
+	return nil
 }

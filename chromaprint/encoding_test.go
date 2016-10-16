@@ -1,6 +1,7 @@
 package chromaprint
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -108,4 +109,16 @@ func TestValidateFingerprintString(t *testing.T) {
 	assert.False(t, ValidateFingerprintString("@#$"))
 	assert.False(t, ValidateFingerprintString("AQAAEwkjrUmSJQpUHflR9mjSJMdZpcO"))
 	assert.True(t, ValidateFingerprintString("AQAAEwkjrUmSJQpUHflR9mjSJMdZpcO_Imdw9dCO9Clu4_wQPvhCB01w6xAtXNcAp5RASgDBhDSCGGIAcwA"))
+}
+
+func ExampleValidateFingerprint() {
+	input := []byte{1, 0, 0, 3, 146, 20, 45, 137, 153, 36, 40, 28, 55, 7, 2}
+	fmt.Println(ValidateFingerprint(input))
+	// Output: true
+}
+
+func ExampleValidateFingerprintString() {
+	input := "AQAAA5IULYmZJCgcNwcC"
+	fmt.Println(ValidateFingerprintString(input))
+	// Output: true
 }
