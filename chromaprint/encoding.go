@@ -6,10 +6,10 @@ import (
 	"errors"
 )
 
-// Fingerprint contains raw fingerprint data
+// Fingerprint contains raw fingerprint data.
 type Fingerprint struct {
-	Version int
-	Hashes  []uint32
+	Version int      // version of the algorithm that generated the fingerprint
+	Hashes  []uint32 // the fingerprint
 }
 
 // DecodeFingerprintString decodes base64-encoded fingerprint string into binary data.
@@ -103,11 +103,13 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 	return &Fingerprint{Version: version, Hashes: hashes}, nil
 }
 
+// ValidateFingerprintString returns true if the input string is a valid base64-encoded fingerprint.
 func ValidateFingerprintString(str string) bool {
 	_, err := ParseFingerprintString(str)
 	return err == nil
 }
 
+// ValidateFingerprint returns true if the input data is a valid fingerprint.
 func ValidateFingerprint(data []byte) bool {
 	_, err := ParseFingerprint(data)
 	return err == nil
