@@ -86,7 +86,7 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 
 	hashes := make([]uint32, totalValues)
 	hi := 0
-	lastBit := 0
+	lastBit := int8(0)
 	for _, bit := range bits {
 		if bit == 0 {
 			if hi > 0 {
