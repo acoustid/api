@@ -188,9 +188,9 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 	log.Printf("[Segment-%v] saved segment data to %v in %s (NumDocs=%v, NumBlocks=%v, Size=%v, Checksum=0x%016X)",
 		segment.ID, filename, elapsed, meta.NumDocs, meta.NumBlocks, meta.Size, meta.Checksum)
 
-	err = idx.saveSegmentMeta(segment)
+	err = segment.SaveMetaFile(idx.Path)
 	if err != nil {
-		log.Printf("failed to save segment meta (%v)", err)
+		log.Printf("failed to save segment metadata (%v)", err)
 		return err
 	}
 
@@ -200,24 +200,6 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 		return err
 	}
 
-	return nil
-}
-
-func (idx *Index) saveSegmentMeta(segment *Segment) error {
-	data, err := json.Marshal(segment.meta)
-	if err != nil {
-		log.Printf("[Segment-%v] error while serializing segment metadata (%v)", segment.ID, err)
-		return err
-	}
-
-	filename := path.Join(idx.Path, segment.MetaFileName())
-	err = safefile.WriteFile(filename, data, 0640)
-	if err != nil {
-		log.Printf("[Segment-%v] error while saving segment metadata to %v (%v)", segment.ID, filename, err)
-		return err
-	}
-
-	log.Printf("[Segment-%v] saved segment metadata to %v", segment.ID, filename)
 	return nil
 }
 

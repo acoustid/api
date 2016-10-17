@@ -1,7 +1,9 @@
 package index
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/dchest/safefile"
 	"log"
 	"os"
 	"path"
@@ -56,4 +58,30 @@ func (s *Segment) RemoveFiles(dir string) {
 			log.Printf("removed segment file %v", name)
 		}
 	}
+}
+
+func (segment *Segment) SaveMetaFile(dir string) error {
+	filename := path.Join(dir, segment.MetaFileName())
+
+	file, err := safefile.Create(filename, 0640)
+	if err != nil {
+		log.Printf("[Segment-%v] error while creating segment metadata file %v (%v)", segment.ID, filename, err)
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewEncoder(file).Encode(segment.meta)
+	if err != nil {
+		log.Printf("[Segment-%v] error while saving segment metadata (%v)", segment.ID, err)
+		return err
+	}
+
+	err = file.Commit()
+	if err != nil {
+		log.Printf("[Segment-%v] error while comitting segment metadata (%v)", segment.ID, err)
+		return err
+	}
+
+	log.Printf("[Segment-%v] saved segment metadata to %v", segment.ID, filename)
+	return nil
 }
