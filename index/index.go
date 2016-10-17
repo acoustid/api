@@ -134,11 +134,12 @@ func (idx *Index) commitState(state IndexState) error {
 
 func (idx *Index) Add(id uint32, hashes []uint32) error {
 	state := idx.newState()
-
 	segment := NewSegment(state.TXID)
-	segment.meta.NumDocs = 1
 
-	filename := path.Join(idx.Path, segment.DataFilename())
+	meta := &segment.meta
+	meta.NumDocs = 1
+
+	filename := path.Join(idx.Path, segment.DataFileName())
 	file, err := safefile.Create(filename, 0640)
 	if err != nil {
 		return err
@@ -146,7 +147,7 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 	defer file.Close()
 
 	started := time.Now()
-	log.Printf("[Segment-%v] started writing segment data to %v", segment.meta.ID, filename)
+	log.Printf("[Segment-%v] started writing segment data to %v", segment.ID, filename)
 
 	sort.Sort(sortutil.Uint32Slice(hashes))
 
@@ -157,7 +158,8 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 		if ptr+binary.MaxVarintLen32+binary.MaxVarintLen32 < len(buf) {
 			binary.LittleEndian.PutUint32(buf[:4], uint32(ptr))
 			file.Write(buf[:ptr])
-			segment.meta.Size += ptr
+			meta.Size += ptr
+			meta.NumBlocks += 1
 			ptr = 4
 			prevHash = 0
 		}
@@ -167,12 +169,13 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 		ptr += binary.PutUvarint(buf[ptr:], uint64(hash-prevHash))
 		ptr += binary.PutUvarint(buf[ptr:], uint64(id))
 		prevHash = hash
-		segment.meta.Checksum += uint64(hash)<<32 | uint64(id)
+		meta.Checksum += uint64(hash)<<32 | uint64(id)
 	}
 	if ptr != 0 {
 		binary.LittleEndian.PutUint32(buf[:4], uint32(ptr))
 		file.Write(buf[:ptr])
-		segment.meta.Size += ptr
+		meta.Size += ptr
+		meta.NumBlocks += 1
 	}
 
 	err = file.Commit()
@@ -182,7 +185,8 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 	}
 
 	elapsed := time.Since(started)
-	log.Printf("[Segment-%v] saved segment data to %v (size %v, checksum 0x%016X, took %s)", segment.meta.ID, filename, segment.meta.Size, segment.meta.Checksum, elapsed)
+	log.Printf("[Segment-%v] saved segment data to %v in %s (NumDocs=%v, NumBlocks=%v, Size=%v, Checksum=0x%016X)",
+		segment.ID, filename, elapsed, meta.NumDocs, meta.NumBlocks, meta.Size, meta.Checksum)
 
 	err = idx.saveSegmentMeta(segment)
 	if err != nil {
@@ -202,18 +206,18 @@ func (idx *Index) Add(id uint32, hashes []uint32) error {
 func (idx *Index) saveSegmentMeta(segment *Segment) error {
 	data, err := json.Marshal(segment.meta)
 	if err != nil {
-		log.Printf("[Segment-%v] error while serializing segment metadata (%v)", segment.meta.ID, err)
+		log.Printf("[Segment-%v] error while serializing segment metadata (%v)", segment.ID, err)
 		return err
 	}
 
-	filename := path.Join(idx.Path, segment.MetaFilename())
+	filename := path.Join(idx.Path, segment.MetaFileName())
 	err = safefile.WriteFile(filename, data, 0640)
 	if err != nil {
-		log.Printf("[Segment-%v] error while saving segment metadata to %v (%v)", segment.meta.ID, filename, err)
+		log.Printf("[Segment-%v] error while saving segment metadata to %v (%v)", segment.ID, filename, err)
 		return err
 	}
 
-	log.Printf("[Segment-%v] saved segment metadata to %v", segment.meta.ID, filename)
+	log.Printf("[Segment-%v] saved segment metadata to %v", segment.ID, filename)
 	return nil
 }
 
