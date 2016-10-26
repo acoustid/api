@@ -13,7 +13,12 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
-	idx, err := index.Open(*dirFlag)
+	dir, err := index.OpenDir(*dirFlag, true)
+	if err != nil {
+		log.Fatalf("failed to open the index (%s)", err)
+	}
+
+	idx, err := index.Open(dir)
 	if err != nil {
 		log.Fatalf("failed to open the index (%s)", err)
 	}

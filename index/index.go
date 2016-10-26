@@ -1,20 +1,15 @@
 package index
 
 import (
-	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/cznic/sortutil"
-	"github.com/dchest/safefile"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
-	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
+	"sort"
+	"github.com/cznic/sortutil"
 )
 
 type IndexState struct {
@@ -23,43 +18,19 @@ type IndexState struct {
 }
 
 type Index struct {
-	Path  string
-	lock  sync.Mutex
-	txid  uint32
-	state IndexState
-
+	dir       Dir
+	lock      sync.Mutex
+	txid      uint32
+	state     IndexState
+	segments  []*Segment
 	BlockSize int
 }
 
-func Open(path string) (*Index, error) {
-	path, err := filepath.Abs(path)
-	if err != nil {
-		log.Printf("could not determine the absolute path to the index directory (%v)", err)
-		return nil, err
+func Open(dir Dir) (*Index, error) {
+	idx := &Index{
+		dir: dir,
+		BlockSize: 4096,
 	}
-
-	stat, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("Creating index directory %s", path)
-			err = os.Mkdir(path, 0750)
-			if err != nil {
-				log.Printf("Could not create the index directory %s", path)
-				return nil, err
-			}
-		} else {
-			log.Printf("Could not open the index directory %s", path)
-			return nil, err
-		}
-	} else if !stat.IsDir() {
-		log.Printf("Path %s is not a directory", path)
-		return nil, errors.New("not a directory")
-	}
-
-	idx := &Index{Path: path}
-
-	idx.BlockSize = 4096
-
 	return idx, nil
 }
 
@@ -67,12 +38,8 @@ func (idx *Index) Close() {
 
 }
 
-func (idx *Index) segmentFileName(txid uint32) string {
-	return path.Join(idx.Path, fmt.Sprintf("segment-%v.dat", txid))
-}
-
 func (idx *Index) stateFileName() string {
-	return path.Join(idx.Path, "state.json")
+	return filepath.Join(idx.dir.Path(), "state.json")
 }
 
 func (idx *Index) newState() IndexState {
@@ -85,11 +52,7 @@ func (idx *Index) newState() IndexState {
 }
 
 func (idx *Index) addSegment(segment *Segment) error {
-	//	segments := make([]uint32, len(state.Segments), len(state.Segments) + 1)
-	//copy(segments, state.Segments)
-	//state.Segments = append(state.Segments, state.TXID)
-
-	//	idx.commitState(state)
+	idx.segments = append(idx.segments, segment)
 	return nil
 }
 
@@ -134,69 +97,22 @@ func (idx *Index) commitState(state IndexState) error {
 
 func (idx *Index) Add(id uint32, hashes []uint32) error {
 	state := idx.newState()
-	segment := NewSegment(state.TXID)
+	segment := NewSegment(idx.dir, state.TXID)
 
-	meta := &segment.meta
-	meta.NumDocs = 1
-
-	filename := path.Join(idx.Path, segment.DataFileName())
-	file, err := safefile.Create(filename, 0640)
+	err := segment.SaveData(SingleDocIterator(id, hashes))
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	started := time.Now()
-	log.Printf("[Segment-%v] started writing segment data to %v", segment.ID, filename)
-
-	sort.Sort(sortutil.Uint32Slice(hashes))
-
-	buf := make([]byte, idx.BlockSize)
-	ptr := 4
-	prevHash := uint32(0)
-	for _, hash := range hashes {
-		if ptr+binary.MaxVarintLen32+binary.MaxVarintLen32 < len(buf) {
-			binary.LittleEndian.PutUint32(buf[:4], uint32(ptr))
-			file.Write(buf[:ptr])
-			meta.Size += ptr
-			meta.NumBlocks += 1
-			ptr = 4
-			prevHash = 0
-		}
-		if ptr == 4 {
-			segment.AddBlock(BlockInfo{FirstHash: hash, Position: segment.meta.Size})
-		}
-		ptr += binary.PutUvarint(buf[ptr:], uint64(hash-prevHash))
-		ptr += binary.PutUvarint(buf[ptr:], uint64(id))
-		prevHash = hash
-		meta.Checksum += uint64(hash)<<32 | uint64(id)
-	}
-	if ptr != 0 {
-		binary.LittleEndian.PutUint32(buf[:4], uint32(ptr))
-		file.Write(buf[:ptr])
-		meta.Size += ptr
-		meta.NumBlocks += 1
-	}
-
-	err = file.Commit()
+	err = segment.SaveMetadata()
 	if err != nil {
-		log.Printf("failed to save segment data (%v)", err)
-		return err
-	}
-
-	elapsed := time.Since(started)
-	log.Printf("[Segment-%v] saved segment data to %v in %s (NumDocs=%v, NumBlocks=%v, Size=%v, Checksum=0x%016X)",
-		segment.ID, filename, elapsed, meta.NumDocs, meta.NumBlocks, meta.Size, meta.Checksum)
-
-	err = segment.SaveMetaFile(idx.Path)
-	if err != nil {
-		log.Printf("failed to save segment metadata (%v)", err)
+		segment.RemoveFiles()
 		return err
 	}
 
 	err = idx.addSegment(segment)
 	if err != nil {
-		segment.RemoveFiles(idx.Path)
+		segment.RemoveFiles()
 		return err
 	}
 
@@ -207,54 +123,39 @@ func (idx *Index) DeleteAll() {
 
 }
 
-func (idx *Index) Search(hashes []uint32) {
+func (idx *Index) Search(query []uint32) error {
+	sort.Sort(sortutil.Uint32Slice(query))
 
-}
+	segments := idx.segments
+	n := len(segments)
+	log.Printf("searching in %v segments", n)
 
-/*func (index *Index) Begin(write bool) (*Tx, error) {
-	tx := &Tx{}
-	if (write) {
-		tx.init(index, atomic.AddUint64(&index.txid, 1))
-	} else {
-		tx.init(index, index.txid)
+	results := make([]map[uint32]int, n)
+
+	sem := make(chan error)
+	for i, s := range segments {
+		go func(i int, s *Segment) {
+			results[i] = map[uint32]int{}
+			sem <- s.Search(query, func(docID uint32) { results[i][docID] += 1 })
+		}(i, s)
 	}
-}
-
-func (idx *Index) CommitState() error {
-	state := IndexState{ TXID: 23424 }
-
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
+	for i := 0; i < n; i++ {
+		err := <-sem
+		if err != nil {
+			return err
+		}
 	}
 
-	filename := fmt.Sprintf("%s%cSTATE", idx.Path, os.PathSeparator)
-	tempFilename := fmt.Sprintf("%s%c.STATE.%d", idx.Path, os.PathSeparator, state.TXID)
-
-	err = ioutil.WriteFile(tempFilename, data, 0640)
-	if err != nil {
-		return err
+	hits := map[uint32]int{}
+	for _, partial := range results {
+		for docID, count := range partial {
+			hits[docID] += count
+		}
 	}
-	log.Printf("Saved state to %s", tempFilename)
 
-	os.Rename(tempFilename, filename)
-	log.Printf("Renamed %s to %s", tempFilename, filename)
+	for docID, count := range hits {
+		log.Printf("found %v with %v hits", docID, count)
+	}
 
 	return nil
 }
-
-func (idx *Index) Add(id uint32, hashes []uint32) error {
-	s := NewSegment()
-	s.Add(id, hashes)
-	return nil
-}
-
-type Segment struct {
-	ID uint64
-}
-
-//writer := idx.Writer()
-//writer.Insert(123, fp)
-//writer.Delete(54234)
-//writer.Commit()
-*/
