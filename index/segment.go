@@ -204,11 +204,12 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 		} else {
 			bi += sort.Search(len(blocks)-bi-1, func(i int) bool { return blocks[bi+i+1] >= q })
 			matched := true
-			for bi < len(blocks) && matched {
+			for matched {
 				reader, err := s.ReadBlock(bi)
 				if err != nil {
 					return err
 				}
+				matched = false
 				n := 1
 				for n > 0 {
 					n, err = reader.Read(tmp)
@@ -232,6 +233,9 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 					}
 				}
 				bi += 1
+				if bi == len(blocks) {
+					break MainLoop
+				}
 			}
 		}
 	}
