@@ -127,28 +127,31 @@ func (idx *Index) Search(query []uint32) error {
 	sort.Sort(sortutil.Uint32Slice(query))
 
 	segments := idx.segments
-	n := len(segments)
-	log.Printf("searching in %v segments", n)
 
-	results := make([]map[uint32]int, n)
+	type result struct {
+		hits map[uint32]int
+		err error
+	}
+	results := make([]result, len(segments))
 
-	sem := make(chan error)
+	var wg sync.WaitGroup
 	for i, s := range segments {
+		wg.Add(1)
 		go func(i int, s *Segment) {
-			results[i] = map[uint32]int{}
-			sem <- s.Search(query, func(docID uint32) { results[i][docID] += 1 })
+			defer wg.Done()
+			hits := make(map[uint32]int)
+			err := s.Search(query, func(docID uint32) { hits[docID] += 1 })
+			results[i] = result{hits: hits, err: err}
 		}(i, s)
 	}
-	for i := 0; i < n; i++ {
-		err := <-sem
-		if err != nil {
-			return err
-		}
-	}
+	wg.Wait()
 
 	hits := map[uint32]int{}
-	for _, partial := range results {
-		for docID, count := range partial {
+	for _, res := range results {
+		if res.err != nil {
+			return res.err
+		}
+		for docID, count := range res.hits {
 			hits[docID] += count
 		}
 	}
@@ -156,6 +159,5 @@ func (idx *Index) Search(query []uint32) error {
 	for docID, count := range hits {
 		log.Printf("found %v with %v hits", docID, count)
 	}
-
 	return nil
 }
