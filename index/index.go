@@ -1,34 +1,31 @@
 package index
 
 import (
-	"encoding/json"
-	"fmt"
+	"github.com/cznic/sortutil"
 	"log"
-	"os"
-	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
-	"sort"
-	"github.com/cznic/sortutil"
 )
 
-type IndexState struct {
-	TXID     uint32   `json:"txid"`
+type Manifest struct {
+	ID       int      `json:"id"`
 	Segments []uint32 `json:"segments"`
 }
 
 type Index struct {
 	dir       Dir
-	lock      sync.Mutex
+	wlock     sync.Mutex
+	rlock     sync.RWMutex
 	txid      uint32
-	state     IndexState
+	manifest  Manifest
 	segments  []*Segment
 	BlockSize int
 }
 
 func Open(dir Dir) (*Index, error) {
 	idx := &Index{
-		dir: dir,
+		dir:       dir,
 		BlockSize: 4096,
 	}
 	return idx, nil
@@ -38,81 +35,49 @@ func (idx *Index) Close() {
 
 }
 
-func (idx *Index) stateFileName() string {
-	return filepath.Join(idx.dir.Path(), "state.json")
-}
+func (idx *Index) appendSegment(segment *Segment) error {
+	idx.wlock.Lock()
+	defer idx.wlock.Unlock()
 
-func (idx *Index) newState() IndexState {
-	state := IndexState{
-		TXID:     atomic.AddUint32(&idx.txid, 1),
-		Segments: idx.state.Segments,
+	manifest := Manifest{
+		ID:       idx.manifest.ID + 1,
+		Segments: append(idx.manifest.Segments, segment.ID()),
 	}
-	log.Printf("started new transaction %v", state.TXID)
-	return state
-}
 
-func (idx *Index) addSegment(segment *Segment) error {
+	file, err := idx.dir.CreateFile("manifest.json")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = file.Commit()
+	if err != nil {
+		return err
+	}
+
+	idx.manifest = manifest
+
+	idx.rlock.Lock()
 	idx.segments = append(idx.segments, segment)
-	return nil
-}
-
-func (idx *Index) commitState(state IndexState) error {
-	name := idx.stateFileName()
-	tmpName := fmt.Sprintf("%v.tmp.%v", name, state.TXID)
-
-	file, err := os.Create(tmpName)
-	if err != nil {
-		log.Printf("failed to create state file %v (%v)", tmpName, err)
-		return err
-	}
-	defer os.Remove(tmpName)
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("state content %s", data)
-
-	_, err = file.Write(data)
-	if err != nil {
-		return err
-	}
-
-	file.Sync()
-	file.Close()
-
-	log.Printf("about to commit transaction %v", state.TXID)
-
-	idx.lock.Lock()
-	os.Rename(tmpName, name)
-	idx.state = state
-	idx.lock.Unlock()
-
-	log.Printf("renamed state file %v to %v", tmpName, name)
-	log.Printf("commited transaction %v", state.TXID)
+	idx.rlock.Unlock()
 
 	return nil
 }
 
-func (idx *Index) Add(id uint32, hashes []uint32) error {
-	state := idx.newState()
-	segment := NewSegment(idx.dir, state.TXID)
+func (idx *Index) createSegment(input TermsIterator) (*Segment, error) {
+	return CreateSegment(idx.dir, atomic.AddUint32(&idx.txid, 1), input)
+}
 
-	err := segment.SaveData(SingleDocIterator(id, hashes))
+func (idx *Index) Add(docid uint32, hashes []uint32) error {
+	segment, err := idx.createSegment(SingleDocIterator(docid, hashes))
 	if err != nil {
 		return err
 	}
 
-	err = segment.SaveMetadata()
+	err = idx.appendSegment(segment)
 	if err != nil {
-		segment.RemoveFiles()
-		return err
-	}
-
-	err = idx.addSegment(segment)
-	if err != nil {
-		segment.RemoveFiles()
+		log.Printf("failed to append new segment to the database (%v)", err)
+		segment.Remove()
 		return err
 	}
 
@@ -126,11 +91,13 @@ func (idx *Index) DeleteAll() {
 func (idx *Index) Search(query []uint32) error {
 	sort.Sort(sortutil.Uint32Slice(query))
 
+	idx.rlock.RLock()
 	segments := idx.segments
+	idx.rlock.RUnlock()
 
 	type result struct {
 		hits map[uint32]int
-		err error
+		err  error
 	}
 	results := make([]result, len(segments))
 

@@ -1,14 +1,14 @@
 package index
 
 import (
-	"io"
-	"os"
 	"bytes"
-	"github.com/dchest/safefile"
-	"io/ioutil"
-	"path/filepath"
 	"errors"
+	"github.com/dchest/safefile"
+	"io"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 )
 
 type FileReader interface {
@@ -42,7 +42,17 @@ type TempDir struct {
 
 var (
 	ErrNotDirectory = errors.New("not a directory")
+	ErrExist        = os.ErrExist
+	ErrNotExist     = os.ErrNotExist
 )
+
+func IsExist(err error) bool {
+	return os.IsExist(err)
+}
+
+func IsNotExist(err error) bool {
+	return os.IsNotExist(err)
+}
 
 // OpenDirs opens a directory on the filesystem, optionally also create it if it does not exist.
 func OpenDir(path string, create bool) (Dir, error) {
@@ -89,7 +99,11 @@ func (d *fsDir) CreateFile(name string) (FileWriter, error) {
 }
 
 func (d *fsDir) RemoveFile(name string) error {
-	return os.Remove(filepath.Join(d.path, name))
+	err := os.Remove(filepath.Join(d.path, name))
+	if err != nil && !os.IsNotExist(err){
+		return err
+	}
+	return nil
 }
 
 func (d *fsDir) ListFiles() ([]string, error) {
@@ -115,12 +129,12 @@ type memDir struct {
 }
 
 type memFileReader struct {
-   *bytes.Reader
+	*bytes.Reader
 }
 
 type memFileWriter struct {
 	bytes.Buffer
-	dir *memDir
+	dir  *memDir
 	name string
 }
 
@@ -143,7 +157,7 @@ func (d *memDir) OpenFile(name string) (FileReader, error) {
 	return reader, nil
 }
 
-func (d* memDir) CreateFile(name string) (FileWriter, error) {
+func (d *memDir) CreateFile(name string) (FileWriter, error) {
 	_, ok := d.entries[name]
 	if ok {
 		return nil, os.ErrExist
@@ -154,10 +168,6 @@ func (d* memDir) CreateFile(name string) (FileWriter, error) {
 
 // Remove removes a file from the directory.
 func (d *memDir) RemoveFile(name string) error {
-	_, ok := d.entries[name]
-	if !ok {
-		return os.ErrNotExist
-	}
 	delete(d.entries, name)
 	return nil
 }
