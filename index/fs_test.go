@@ -1,12 +1,12 @@
 package index
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"io/ioutil"
-	"github.com/stretchr/testify/require"
 	"sort"
+	"testing"
 )
 
 func TestMemDir_Write(t *testing.T) {
@@ -40,7 +40,7 @@ func TestMemDir_WriteWithoutCommit(t *testing.T) {
 }
 
 func TestDir_List(t *testing.T) {
-	check := func (t *testing.T, d Dir) {
+	check := func(t *testing.T, d Dir) {
 		f1, err := d.CreateFile("foo")
 		require.NoError(t, err)
 		f1.Commit()

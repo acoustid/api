@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("failed to open the index (%s)", err)
 	}
 
-	idx, err := index.Open(dir)
+	idx, err := index.Open(dir, true)
 	if err != nil {
 		log.Fatalf("failed to open the index (%s)", err)
 	}

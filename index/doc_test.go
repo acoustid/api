@@ -1,8 +1,8 @@
 package index
 
 import (
-	"testing"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestSingleDocIterator_Read(t *testing.T) {
@@ -20,16 +20,16 @@ func TestSingleDocIterator_Read(t *testing.T) {
 	require.Equal(t, []TermDocID{PackTermDocID(2, 1234), PackTermDocID(3, 1234)}, buf[:n])
 
 	n, err = it.Read(buf)
-	require.Equal(t, err, EOF)
+	require.NoError(t, err)
 	require.Equal(t, 3, n)
 	require.Equal(t, []TermDocID{PackTermDocID(4, 1234), PackTermDocID(5, 1234), PackTermDocID(6, 1234)}, buf[:n])
 
 	n, err = it.Read(buf)
-	require.Equal(t, err, EOF)
+	require.NoError(t, err)
 	require.Equal(t, 0, n)
 
 	n, err = it.Read(buf)
-	require.Equal(t, err, EOF)
+	require.NoError(t, err)
 	require.Equal(t, 0, n)
 }
 
@@ -42,7 +42,7 @@ func TestSingleDocIterator_SeekTo(t *testing.T) {
 	require.True(t, found)
 
 	n, err := it.Read(buf)
-	require.Equal(t, err, EOF)
+	require.NoError(t, err)
 	require.Equal(t, 3, n)
 	require.Equal(t, []TermDocID{PackTermDocID(4, 1234), PackTermDocID(5, 1234), PackTermDocID(6, 1234)}, buf[:n])
 }
@@ -56,6 +56,6 @@ func TestSingleDocIterator_SeekTo_NotFound(t *testing.T) {
 	require.False(t, found)
 
 	n, err := it.Read(buf)
-	require.Equal(t, err, EOF)
+	require.NoError(t, err)
 	require.Equal(t, 0, n)
 }

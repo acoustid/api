@@ -42,8 +42,6 @@ type TempDir struct {
 
 var (
 	ErrNotDirectory = errors.New("not a directory")
-	ErrExist        = os.ErrExist
-	ErrNotExist     = os.ErrNotExist
 )
 
 func IsExist(err error) bool {
@@ -100,7 +98,7 @@ func (d *fsDir) CreateFile(name string) (FileWriter, error) {
 
 func (d *fsDir) RemoveFile(name string) error {
 	err := os.Remove(filepath.Join(d.path, name))
-	if err != nil && !os.IsNotExist(err){
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -146,6 +144,10 @@ func NewMemDir() Dir {
 	}
 }
 
+func (d *memDir) String() string {
+	return ":memory:"
+}
+
 func (d *memDir) OpenFile(name string) (FileReader, error) {
 	entry, ok := d.entries[name]
 	if !ok {
@@ -158,12 +160,7 @@ func (d *memDir) OpenFile(name string) (FileReader, error) {
 }
 
 func (d *memDir) CreateFile(name string) (FileWriter, error) {
-	_, ok := d.entries[name]
-	if ok {
-		return nil, os.ErrExist
-	}
-	writer := &memFileWriter{Buffer: bytes.Buffer{}, dir: d, name: name}
-	return writer, nil
+	return &memFileWriter{Buffer: bytes.Buffer{}, dir: d, name: name}, nil
 }
 
 // Remove removes a file from the directory.

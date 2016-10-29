@@ -1,8 +1,8 @@
 package index
 
 import (
-	"sort"
 	"github.com/cznic/sortutil"
+	"sort"
 )
 
 type singleDocIterator struct {
@@ -20,6 +20,7 @@ func (it *singleDocIterator) NumDocs() int {
 }
 
 func (it *singleDocIterator) SeekTo(term uint32) (found bool, err error) {
+	err = nil
 	i := sort.Search(len(it.terms), func(i int) bool { return it.terms[i] >= term })
 	if i < len(it.terms) && it.terms[i] == term {
 		found = true
@@ -31,6 +32,7 @@ func (it *singleDocIterator) SeekTo(term uint32) (found bool, err error) {
 }
 
 func (r *singleDocIterator) Read(data []TermDocID) (n int, err error) {
+	err = nil
 	n = len(data)
 	remaining := len(r.terms)
 	if n >= remaining {

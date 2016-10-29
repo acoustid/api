@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -14,114 +15,139 @@ import (
 
 const (
 	DefaultBlockSize = 1024
+	MaxBlockSize     = math.MaxInt32
 )
 
-type segmentMeta struct {
-	ID        uint32
-	NumDocs   int
-	NumBlocks int
-	BlockSize int
-	Checksum  uint64
-	LastTerm  uint32
+var (
+	ErrNoData             = errors.New("no data")
+	ErrInvalidBlockHeader = errors.New("invalid block header")
+	ErrInvalidBlockData   = errors.New("invalid block data")
+)
+
+type SegmentID uint64
+
+func NewSegmentID(txid uint32, counter uint8) SegmentID {
+	return SegmentID(uint64(txid)<<8 | uint64(counter))
+}
+
+func (id SegmentID) TXID() uint32   { return uint32(id >> 8) }
+func (id SegmentID) Counter() uint8 { return uint8(id & 0xff) }
+
+func (id SegmentID) String() string {
+	return fmt.Sprintf("%v:%v", id.TXID(), id.Counter())
+}
+
+type SegmentMeta struct {
+	BlockSize int    `json:"blocksize"`
+	NumBlocks int    `json:"nblocks"`
+	NumDocs   int    `json:"ndocs"`
+	NumTerms  int    `json:"nterms"`
+	Checksum  uint32 `json:"checksum"`
+	MinDocID  uint32 `json:"mindocid"`
+	MaxDocID  uint32 `json:"maxdocid"`
+	MinTerm   uint32 `json:"minterm"`
+	MaxTerm   uint32 `json:"maxterm"`
 }
 
 type Segment struct {
+	ID         SegmentID   `json:"id"`
+	Meta       SegmentMeta `json:"meta"`
 	dir        Dir
-	meta       segmentMeta
 	blockIndex []uint32
 	reader     FileReader
 }
 
-func CreateSegment(dir Dir, id uint32, input TermsIterator) (*Segment, error) {
+func CreateSegment(dir Dir, id SegmentID, input TermsIterator) (*Segment, error) {
 	s := &Segment{
-		dir: dir,
-		meta: segmentMeta{
-			ID: id,
+		ID: id,
+		Meta: SegmentMeta{
 			BlockSize: DefaultBlockSize,
+			MinDocID:  math.MaxUint32,
+			MinTerm:   math.MaxUint32,
 		},
+		dir: dir,
 	}
 
 	started := time.Now()
 
-	dataFile, err := s.dir.CreateFile(s.dataFileName())
+	log.Printf("started segment %v", s.ID)
+
+	name := s.fileName()
+	file, err := s.dir.CreateFile(name)
 	if err != nil {
 		return nil, err
 	}
-	defer dataFile.Close()
+	defer file.Close()
 
-	metaFile, err := s.dir.CreateFile(s.metaFileName())
-	if err != nil {
-		return nil, err
-	}
-	defer metaFile.Close()
-
-	err = s.writeDataBlocks(dataFile, input)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.writeMetadata(metaFile)
+	err = s.writeData(file, input)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dataFile.Commit()
+	err = file.Commit()
 	if err != nil {
 		return nil, err
 	}
 
-	err = metaFile.Commit()
+	log.Printf("completed segment %v with data file '%v' (docs=%v, blocks=%v, checksum=0x%08x, duration=%s)",
+		s.ID, name, s.Meta.NumDocs, s.Meta.NumBlocks, s.Meta.Checksum, time.Since(started))
+
+	s.reader, err = s.dir.OpenFile(name)
 	if err != nil {
 		s.Remove()
 		return nil, err
 	}
-
-	s.reader, err = s.dir.OpenFile(s.dataFileName())
-	if err != nil {
-		s.Remove()
-		return nil, err
-	}
-
-	log.Printf("created new segment %v (docs=%v, blocks=%v, checksum=0x%016x, duration=%s)",
-		s.meta.ID, s.meta.NumDocs, s.meta.NumBlocks, s.meta.Checksum, time.Since(started))
 
 	return s, nil
 }
 
-func (s *Segment) ID() uint32 { return s.meta.ID }
-
-func (s *Segment) dataFileName() string {
-	return fmt.Sprintf("segment-%v.data", s.meta.ID)
-}
-
-func (s *Segment) metaFileName() string {
-	return fmt.Sprintf("segment-%v.meta.json", s.meta.ID)
-}
-
-func (s *Segment) Remove() {
-	names := []string{s.dataFileName(), s.metaFileName()}
-	for _, name := range names {
-		if err := s.dir.RemoveFile(name); err != nil {
-			log.Printf("failed to remove segment file %v (%v)", name, err)
-		} else {
-			log.Printf("removed segment file %v", name)
-		}
+func (s *Segment) Open(dir Dir) error {
+	file, err := dir.OpenFile(s.fileName())
+	if err != nil {
+		return err
 	}
-	return
+	blockIndex := make([]uint32, s.Meta.NumDocs)
+	_, err = file.Seek(int64(s.Meta.BlockSize*s.Meta.NumBlocks), 0)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(file, binary.LittleEndian, blockIndex)
+	if err != nil {
+		return err
+	}
+	s.dir = dir
+	s.reader = file
+	s.blockIndex = blockIndex
+	return nil
 }
 
-func (s *Segment) writeMetadata(writer io.Writer) error {
-	return json.NewEncoder(writer).Encode(s.meta)
+func (s *Segment) fileName() string {
+	return fmt.Sprintf("segment-%x.dat", uint64(s.ID))
 }
 
-func (s *Segment) writeDataBlocks(writer io.Writer, it TermsIterator) error {
-	input := make([]TermDocID, s.meta.BlockSize/2)
+// Remove deletes all files associated with the segment
+func (s *Segment) Remove() error {
+	name := s.fileName()
+	if err := s.dir.RemoveFile(name); err != nil {
+		log.Printf("failed to remove segment file %v (%v)", name, err)
+		return err
+	}
+	log.Printf("removed segment file %v", name)
+	return nil
+}
 
-	buf := make([]byte, s.meta.BlockSize)
+func (s *Segment) writeData(file io.Writer, it TermsIterator) error {
+	writer := bufio.NewWriter(file)
+
+	input := make([]TermDocID, s.Meta.BlockSize)
+
+	buf := make([]byte, s.Meta.BlockSize)
 	ptr := 4
 
 	lastTerm := uint32(0)
 	lastDocID := uint32(0)
+
+	s.Meta.NumDocs = it.NumDocs()
 
 	for {
 		n, err := it.Read(input)
@@ -147,19 +173,31 @@ func (s *Segment) writeDataBlocks(writer io.Writer, it TermsIterator) error {
 			}
 			term, docID := pair.Unpack()
 			if ptr == 4 {
+				s.Meta.NumBlocks += 1
 				s.blockIndex = append(s.blockIndex, term)
 			}
-
 			ptr += binary.PutUvarint(buf[ptr:], uint64(term-lastTerm))
 			if term == lastTerm {
 				ptr += binary.PutUvarint(buf[ptr:], uint64(docID-lastDocID))
 			} else {
 				ptr += binary.PutUvarint(buf[ptr:], uint64(docID))
 			}
-
 			lastTerm = term
 			lastDocID = docID
-			s.meta.Checksum += pair.Pack()
+			s.Meta.NumTerms += 1
+			s.Meta.Checksum += term + docID
+			if s.Meta.MinDocID > docID {
+				s.Meta.MinDocID = docID
+			}
+			if s.Meta.MaxDocID < docID {
+				s.Meta.MaxDocID = docID
+			}
+			if s.Meta.MinTerm > term {
+				s.Meta.MinTerm = term
+			}
+			if s.Meta.MaxTerm < term {
+				s.Meta.MaxTerm = term
+			}
 		}
 	}
 	if ptr > 4 {
@@ -173,9 +211,22 @@ func (s *Segment) writeDataBlocks(writer io.Writer, it TermsIterator) error {
 		}
 	}
 
-	s.meta.NumDocs = it.NumDocs()
-	s.meta.NumBlocks = len(s.blockIndex)
-	s.meta.LastTerm = lastTerm
+	if len(s.blockIndex) == 0 {
+		return ErrNoData
+	}
+
+	binary.Write(writer, binary.LittleEndian, s.blockIndex)
+
+	writer.WriteByte(byte(0))
+	err := json.NewEncoder(writer).Encode(s.Meta)
+	if err != nil {
+		return err
+	}
+
+	err = writer.Flush()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -184,10 +235,10 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 	tmp := make([]TermDocID, 256)
 	blocks := s.blockIndex
 	qi, bi := 0, 0
-	MainLoop:
+MainLoop:
 	for qi < len(query) && bi < len(blocks) {
 		q := query[qi]
-		if s.meta.LastTerm < q {
+		if s.Meta.MaxTerm < q {
 			break MainLoop
 		}
 		if blocks[bi] > q {
@@ -234,28 +285,19 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 }
 
 func (s *Segment) ReadBlock(i int) (TermsIterator, error) {
-	data := make([]byte, s.meta.BlockSize)
-	_, err := s.reader.ReadAt(data, int64(i)*int64(s.meta.BlockSize))
+	data := make([]byte, s.Meta.BlockSize)
+	_, err := s.reader.ReadAt(data, int64(i)*int64(s.Meta.BlockSize))
 	if err != nil {
 		return nil, err
 	}
 	return NewBlockReader(data)
 }
 
-var (
-	EOF                   = io.EOF
-	ErrInvalidBlockHeader = errors.New("invalid block header")
-	ErrInvalidBlockData   = errors.New("invalid block data")
-)
-
 type blockReader struct {
 	data      []byte
 	lastTerm  uint32
 	lastDocID uint32
 }
-
-// MaxBlockSize is the maximum possible size of a block in bytes.
-const MaxBlockSize = math.MaxInt32
 
 // NewBlockReader creates a new SegmentReader that iterates over encoded block data.
 func NewBlockReader(data []byte) (TermsIterator, error) {

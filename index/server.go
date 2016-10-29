@@ -9,7 +9,7 @@ import (
 )
 
 type context struct {
-	idx *Index
+	idx *DB
 }
 
 type indexHandler struct{ context }
@@ -25,8 +25,8 @@ func (h *indexHandler) ServeGET(w http.ResponseWriter, r *http.Request) {
 
 func (h *indexHandler) ServePOST(w http.ResponseWriter, r *http.Request) {
 	type Doc struct {
-		ID     uint32   `json:"id"`
-		Hashes []uint32 `json:"hashes"`
+		ID    uint32   `json:"id"`
+		Terms []uint32 `json:"terms"`
 	}
 	type Request struct {
 		Docs []Doc `json:"docs"`
@@ -56,14 +56,14 @@ func (h *indexHandler) ServePOST(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, http.StatusBadRequest, "missing ID")
 			return
 		}
-		if len(doc.Hashes) == 0 {
-			writeErrorResponse(w, http.StatusBadRequest, "missing hashes")
+		if len(doc.Terms) == 0 {
+			writeErrorResponse(w, http.StatusBadRequest, "missing terms")
 			return
 		}
 	}
 
 	for _, doc := range req.Docs {
-		h.idx.Add(doc.ID, doc.Hashes)
+		h.idx.Add(doc.ID, doc.Terms)
 	}
 
 	type Response struct {
@@ -122,7 +122,7 @@ func writeErrorResponse(w http.ResponseWriter, status int, message string) {
 	writeResponse(w, status, response)
 }
 
-func ListenAndServe(addr string, idx *Index) error {
+func ListenAndServe(addr string, idx *DB) error {
 	context := context{idx: idx}
 	mux := http.NewServeMux()
 	mux.Handle("/index", &indexHandler{context: context})
