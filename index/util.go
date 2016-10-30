@@ -11,39 +11,31 @@ func (s Uint32Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 // SortUint32s sorts a slice of uint32s in increasing order.
 func SortUint32s(s []uint32) { sort.Sort(Uint32Slice(s)) }
 
-// TermsIterator is an abstraction for iterating over TermDocIDs.
-type TermsIterator interface {
+// ValueReader is an abstraction for iterating over TermDocIDs.
+type ValueReader interface {
 	// NumDocs returns the number of docs this iterator contains.
 	NumDocs() int
 
-	// SeekTo fast-forwards the iterator to a particular term.
-	// Returns true in found if the term was found, in which case
-	// you can use Read to get the data.
-	SeekTo(term uint32) (found bool, err error)
-
-	// Read reads a block of TermDocIDs. It tries to fill the given buffer
+	// Read reads a block of Values. It tries to fill the given buffer
 	// and returns the number of items added there. If the result is 0,
 	// the EOF has been reached. Note that this might return a non-zero result
 	// and an error at the same time.
-	Read(data []TermDocID) (n int, err error)
+	ReadValues(values []Value) (n int, err error)
 }
 
-// TermDocID is a (term,docid) pair packed into a 64-bit integer.
-type TermDocID uint64
-
-func PackTermDocID(term uint32, docID uint32) TermDocID {
-	return TermDocID(uint64(term)<<32 | uint64(docID))
+// Value represents one (term,docID) pair in an inverted index.
+type Value struct {
+	Term  uint32
+	DocID uint32
 }
 
-func (x TermDocID) Unpack() (term uint32, docID uint32) {
-	term = x.Term()
-	docID = x.DocID()
-	return
-}
+type ValueSlice []Value
 
-func (x TermDocID) Pack() uint64 {
-	return uint64(x)
+func (s ValueSlice) Len() int { return len(s) }
+func (s ValueSlice) Less(i, j int) bool {
+	return s[i].Term < s[j].Term || (s[i].Term == s[j].Term && s[i].DocID < s[j].DocID)
 }
+func (s ValueSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func (x TermDocID) Term() uint32  { return uint32((x >> 32) & 0xffffffff) }
-func (x TermDocID) DocID() uint32 { return uint32(x & 0xffffffff) }
+// SortValues sorts a slice of Values in increasing order.
+func SortValues(s []Value) { sort.Sort(ValueSlice(s)) }

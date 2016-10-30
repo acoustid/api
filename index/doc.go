@@ -1,45 +1,47 @@
 package index
 
-import (
-	"sort"
-)
-
-type singleDocIterator struct {
-	docid uint32
+type SingleDocReader struct {
+	docID uint32
 	terms []uint32
+	pos   int
 }
 
-func SingleDocIterator(docid uint32, terms []uint32) TermsIterator {
+func NewSingleDocReader(docID uint32, terms []uint32) ValueReader {
 	SortUint32s(terms)
-	return &singleDocIterator{docid: docid, terms: terms}
+	return &SingleDocReader{docID: docID, terms: terms}
 }
 
-func (it *singleDocIterator) NumDocs() int {
+func (r *SingleDocReader) NumDocs() int {
 	return 1
 }
 
-func (it *singleDocIterator) SeekTo(term uint32) (found bool, err error) {
-	err = nil
-	i := sort.Search(len(it.terms), func(i int) bool { return it.terms[i] >= term })
-	if i < len(it.terms) && it.terms[i] == term {
-		found = true
-	} else {
-		found = false
+func (r *SingleDocReader) ReadValues(values []Value) (int, error) {
+	n := len(r.terms) - r.pos
+	for i := range values[:n] {
+		values[i] = Value{Term: r.terms[r.pos+i], DocID: r.docID}
+		n = i
 	}
-	it.terms = it.terms[i:]
-	return
+	r.pos += n
+	return n, nil
 }
 
-func (r *singleDocIterator) Read(data []TermDocID) (n int, err error) {
-	err = nil
-	n = len(data)
-	remaining := len(r.terms)
-	if n >= remaining {
-		n = remaining
-	}
-	for i := 0; i < n; i++ {
-		data[i] = PackTermDocID(r.terms[i], r.docid)
-	}
-	r.terms = r.terms[n:]
-	return
+type ValueSliceReader struct {
+	numDocs int
+	values  []Value
+	pos     int
+}
+
+func NewValueSliceReader(numDocs int, values []Value) ValueReader {
+	SortValues(values)
+	return &ValueSliceReader{numDocs: numDocs, values: values}
+}
+
+func (r *ValueSliceReader) NumDocs() int {
+	return r.numDocs
+}
+
+func (r *ValueSliceReader) ReadValues(values []Value) (int, error) {
+	n := copy(values, r.values[r.pos:])
+	r.pos += n
+	return n, nil
 }

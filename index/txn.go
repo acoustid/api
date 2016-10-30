@@ -7,35 +7,60 @@ import (
 
 type Transaction struct {
 	Snapshot
-	counter uint8
-	closed  bool
+	counter   uint8
+	committed bool
+	values    []Value
+	numDocs   int
 }
 
 var (
-	ErrTransactionClosed = errors.New("transaction is already closed")
-	ErrTooManySegments   = errors.New("too many segments")
+	ErrCommitted       = errors.New("transaction is already committed")
+	ErrTooManySegments = errors.New("too many segments")
 )
 
 func (txn *Transaction) AddDoc(docID uint32, terms []uint32) error {
-	if txn.closed {
-		return ErrTransactionClosed
+	if txn.committed {
+		return ErrCommitted
 	}
 
-	segment, err := txn.createSegment(SingleDocIterator(docID, terms))
-	if err != nil {
-		return err
+	for _, term := range terms {
+		txn.values = append(txn.values, Value{DocID: docID, Term: term})
 	}
+	txn.numDocs += 1
 
-	m := txn.manifest
-	m.NumDocs += segment.Meta.NumDocs
-	m.NumTerms += segment.Meta.NumTerms
-	m.Checksum += segment.Meta.Checksum
-	m.Segments = append(m.Segments, segment)
+	if len(txn.values) > 1024*1024 {
+		err := txn.Flush()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (txn *Transaction) createSegment(input TermsIterator) (*Segment, error) {
+func (txn *Transaction) Flush() error {
+	if txn.committed {
+		return ErrCommitted
+	}
+
+	if len(txn.values) == 0 {
+		return nil
+	}
+
+	segment, err := txn.createSegment(NewValueSliceReader(txn.numDocs, txn.values))
+	if err != nil {
+		return err
+	}
+
+	txn.manifest.AddSegment(segment)
+
+	txn.values = txn.values[:0]
+	txn.numDocs = 0
+
+	return nil
+}
+
+func (txn *Transaction) createSegment(input ValueReader) (*Segment, error) {
 	if txn.counter == math.MaxUint8 {
 		return nil, ErrTooManySegments
 	}
@@ -44,10 +69,20 @@ func (txn *Transaction) createSegment(input TermsIterator) (*Segment, error) {
 }
 
 func (txn *Transaction) Commit() error {
-	err := txn.db.commit(txn)
+	if txn.committed {
+		return ErrCommitted
+	}
+
+	err := txn.Flush()
 	if err != nil {
 		return err
 	}
-	txn.closed = true
+
+	err = txn.db.commit(txn)
+	if err != nil {
+		return err
+	}
+
+	txn.committed = true
 	return nil
 }
