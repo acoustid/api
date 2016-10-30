@@ -1,17 +1,12 @@
 package index
 
-import (
-	"github.com/cznic/sortutil"
-	"sort"
-)
-
 type Snapshot struct {
 	db       *DB
 	manifest *Manifest
 }
 
 func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
-	sort.Sort(sortutil.Uint32Slice(query))
+	SortUint32s(query)
 
 	type result struct {
 		hits map[uint32]int

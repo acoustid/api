@@ -1,7 +1,6 @@
 package index
 
 import (
-	"github.com/cznic/sortutil"
 	"sort"
 )
 
@@ -11,7 +10,7 @@ type singleDocIterator struct {
 }
 
 func SingleDocIterator(docid uint32, terms []uint32) TermsIterator {
-	sort.Sort(sortutil.Uint32Slice(terms))
+	SortUint32s(terms)
 	return &singleDocIterator{docid: docid, terms: terms}
 }
 

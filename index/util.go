@@ -1,5 +1,16 @@
 package index
 
+import "sort"
+
+type Uint32Slice []uint32
+
+func (s Uint32Slice) Len() int           { return len(s) }
+func (s Uint32Slice) Less(i, j int) bool { return s[i] < s[j] }
+func (s Uint32Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+// SortUint32s sorts a slice of uint32s in increasing order.
+func SortUint32s(s []uint32) { sort.Sort(Uint32Slice(s)) }
+
 // TermsIterator is an abstraction for iterating over TermDocIDs.
 type TermsIterator interface {
 	// NumDocs returns the number of docs this iterator contains.
