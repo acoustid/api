@@ -51,6 +51,7 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 type DB struct {
 	dir      Dir
 	mu       sync.Mutex
+	txid     uint32
 	manifest atomic.Value
 }
 
@@ -79,7 +80,7 @@ func Open(dir Dir, create bool) (*DB, error) {
 		}
 	}
 
-	db := &DB{dir: dir}
+	db := &DB{dir: dir, txid: manifest.ID}
 	db.manifest.Store(&manifest)
 	return db, nil
 }
@@ -113,11 +114,8 @@ func (db *DB) newSnapshot() *Snapshot {
 }
 
 func (db *DB) newTransaction() *Transaction {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	manifest := db.manifest.Load().(*Manifest).Clone()
-	manifest.ID += 1
+	manifest.ID = atomic.AddUint32(&db.txid, 1)
 
 	log.Printf("started transaction %d", manifest.ID)
 
