@@ -2,10 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/acoustid/go-acoustid/index"
 	"github.com/acoustid/go-acoustid/index/vfs"
 	"log"
+	"net"
+	"strconv"
 )
 
 var (
@@ -26,16 +27,22 @@ func main() {
 		var err error
 		fs, err = vfs.OpenDir(*dbPathOpt, true)
 		if err != nil {
-			log.Fatalf("Failed to open the index (%s)", err)
+			log.Fatalf("Failed to open the database directory: %v", err)
 		}
 	}
 
+	log.Printf("Opening database in %v", fs)
 	idx, err := index.Open(fs, true)
 	if err != nil {
-		log.Fatalf("failed to open the index (%s)", err)
+		log.Fatalf("Failed to open the database: %v", err)
 	}
 	defer idx.Close()
 
-	addr := fmt.Sprintf("%s:%d", *hostOpt, *portOpt)
-	log.Fatal(index.ListenAndServe(addr, idx))
+	addr := net.JoinHostPort(*hostOpt, strconv.Itoa(*portOpt))
+	log.Printf("Listening on %v", addr)
+
+	err = index.ListenAndServe(addr, idx)
+	if err != nil {
+		log.Fatalf("Failed to start the server: %v", err)
+	}
 }

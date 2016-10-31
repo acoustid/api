@@ -127,6 +127,5 @@ func ListenAndServe(addr string, idx *DB) error {
 	mux := http.NewServeMux()
 	mux.Handle("/index", &indexHandler{context: context})
 	mux.Handle("/stats", &statsHandler{context: context})
-	log.Printf("listening on %v", addr)
 	return http.ListenAndServe(addr, mux)
 }
