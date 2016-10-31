@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/util/intcompress"
 	"io"
 	"log"
@@ -52,19 +53,17 @@ type SegmentMeta struct {
 type Segment struct {
 	ID         SegmentID   `json:"id"`
 	Meta       SegmentMeta `json:"meta"`
-	dir        Dir
 	blockIndex []uint32
-	reader     FileReader
+	reader     vfs.InputFile
 }
 
-func CreateSegment(dir Dir, id SegmentID, input ValueReader) (*Segment, error) {
+func CreateSegment(fs vfs.FileSystem, id SegmentID, input ValueReader) (*Segment, error) {
 	s := &Segment{
 		ID: id,
 		Meta: SegmentMeta{
 			BlockSize: DefaultBlockSize,
 			MinTerm:   math.MaxUint32,
 		},
-		dir: dir,
 	}
 
 	started := time.Now()
@@ -72,7 +71,7 @@ func CreateSegment(dir Dir, id SegmentID, input ValueReader) (*Segment, error) {
 	log.Printf("started segment %v", s.ID)
 
 	name := s.fileName()
-	file, err := s.dir.CreateFile(name)
+	file, err := fs.CreateAtomicFile(name)
 	if err != nil {
 		return nil, err
 	}
@@ -91,17 +90,17 @@ func CreateSegment(dir Dir, id SegmentID, input ValueReader) (*Segment, error) {
 	log.Printf("completed segment %v with data file '%v' (docs=%v, blocks=%v, checksum=0x%08x, duration=%s)",
 		s.ID, name, s.Meta.NumDocs, s.Meta.NumBlocks, s.Meta.Checksum, time.Since(started))
 
-	s.reader, err = s.dir.OpenFile(name)
+	s.reader, err = fs.OpenFile(name)
 	if err != nil {
-		s.Remove()
+		s.Remove(fs)
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *Segment) Open(dir Dir) error {
-	file, err := dir.OpenFile(s.fileName())
+func (s *Segment) Open(fs vfs.FileSystem) error {
+	file, err := fs.OpenFile(s.fileName())
 	if err != nil {
 		return err
 	}
@@ -114,7 +113,6 @@ func (s *Segment) Open(dir Dir) error {
 	if err != nil {
 		return err
 	}
-	s.dir = dir
 	s.reader = file
 	s.blockIndex = blockIndex
 	return nil
@@ -125,9 +123,9 @@ func (s *Segment) fileName() string {
 }
 
 // Remove deletes all files associated with the segment
-func (s *Segment) Remove() error {
+func (s *Segment) Remove(fs vfs.FileSystem) error {
 	name := s.fileName()
-	if err := s.dir.RemoveFile(name); err != nil {
+	if err := fs.Remove(name); err != nil {
 		log.Printf("failed to remove segment file %v (%v)", name, err)
 		return err
 	}

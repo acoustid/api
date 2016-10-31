@@ -65,7 +65,7 @@ func (txn *Transaction) createSegment(input ValueReader) (*Segment, error) {
 		return nil, ErrTooManySegments
 	}
 	txn.counter += 1
-	return CreateSegment(txn.db.dir, NewSegmentID(txn.manifest.ID, txn.counter), input)
+	return CreateSegment(txn.db.fs, NewSegmentID(txn.manifest.ID, txn.counter), input)
 }
 
 func (txn *Transaction) Commit() error {

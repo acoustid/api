@@ -1,15 +1,16 @@
 package index
 
 import (
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestIndex(t *testing.T) {
-	dir := NewMemDir()
+	fs := vfs.CreateMemDir()
 
-	db, err := Open(dir, true)
+	db, err := Open(fs, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -20,7 +21,7 @@ func TestIndex(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, hits, map[uint32]int{1234: 2})
 
-	db2, err := Open(dir, false)
+	db2, err := Open(fs, false)
 	require.NoError(t, err)
 	defer db2.Close()
 

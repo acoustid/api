@@ -17,9 +17,11 @@ func (r *SingleDocReader) NumDocs() int {
 
 func (r *SingleDocReader) ReadValues(values []Value) (int, error) {
 	n := len(r.terms) - r.pos
+	if n > len(values) {
+		n = len(values)
+	}
 	for i := range values[:n] {
 		values[i] = Value{Term: r.terms[r.pos+i], DocID: r.docID}
-		n = i
 	}
 	r.pos += n
 	return n, nil

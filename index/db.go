@@ -2,6 +2,7 @@ package index
 
 import (
 	"encoding/json"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -49,30 +50,30 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 }
 
 type DB struct {
-	dir      Dir
+	fs       vfs.FileSystem
 	mu       sync.Mutex
 	txid     uint32
 	manifest atomic.Value
 }
 
-func Open(dir Dir, create bool) (*DB, error) {
+func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 	var manifest Manifest
-	file, err := dir.OpenFile(ManifestFilename)
+	file, err := fs.OpenFile(ManifestFilename)
 	if err != nil {
-		if IsNotExist(err) && create {
-			log.Printf("creating new database in %v", dir)
+		if vfs.IsNotExist(err) && create {
+			log.Printf("creating new database in %v", fs)
 		} else {
 			return nil, err
 		}
 	} else {
-		log.Printf("opening database %v", dir)
+		log.Printf("opening database %v", fs)
 		err = json.NewDecoder(file).Decode(&manifest)
 		if err != nil {
 			return nil, err
 		}
 		log.Printf("manifest=%v", manifest)
 		for i, segment := range manifest.Segments {
-			err = segment.Open(dir)
+			err = segment.Open(fs)
 			if err != nil {
 				return nil, err
 			}
@@ -80,7 +81,7 @@ func Open(dir Dir, create bool) (*DB, error) {
 		}
 	}
 
-	db := &DB{dir: dir, txid: manifest.ID}
+	db := &DB{fs: fs, txid: manifest.ID}
 	db.manifest.Store(&manifest)
 	return db, nil
 }
@@ -131,7 +132,7 @@ func (db *DB) commit(txn *Transaction) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	file, err := db.dir.CreateFile("manifest.json")
+	file, err := db.fs.CreateAtomicFile("manifest.json")
 	if err != nil {
 		return err
 	}
