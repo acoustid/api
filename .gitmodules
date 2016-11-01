@@ -12,4 +12,4 @@
 	url = https://github.com/camlistore/go4
 [submodule "vendor/golang.org/x/sys"]
 	path = vendor/golang.org/x/sys
-	url = https://go.googlesource.com/sys
+	url = https://github.com/golang/sys
