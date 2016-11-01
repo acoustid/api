@@ -1,0 +1,15 @@
+[submodule "vendor/gopkg.in/mgo.v2"]
+	path = vendor/gopkg.in/mgo.v2
+	url = https://gopkg.in/mgo.v2
+[submodule "vendor/github.com/stretchr/testify"]
+	path = vendor/github.com/stretchr/testify
+	url = https://github.com/stretchr/testify
+[submodule "vendor/github.com/dchest/safefile"]
+	path = vendor/github.com/dchest/safefile
+	url = https://github.com/dchest/safefile
+[submodule "vendor/go4.org"]
+	path = vendor/go4.org
+	url = https://github.com/camlistore/go4
+[submodule "vendor/golang.org/x/sys"]
+	path = vendor/golang.org/x/sys
+	url = https://go.googlesource.com/sys
