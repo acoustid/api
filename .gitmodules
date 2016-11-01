@@ -1,6 +1,6 @@
 [submodule "vendor/gopkg.in/mgo.v2"]
 	path = vendor/gopkg.in/mgo.v2
-	url = https://gopkg.in/mgo.v2
+	url = https://github.com/go-mgo/mgo
 [submodule "vendor/github.com/stretchr/testify"]
 	path = vendor/github.com/stretchr/testify
 	url = https://github.com/stretchr/testify
