@@ -9,11 +9,6 @@ before_script:
   - ln -s `pwd` /go/src/github.com/acoustid/go-acoustid
   - cd /go/src/github.com/acoustid/go-acoustid/
 
-build:
-  stage: build
-  script:
-    - go build -v ./{api,index,chromaprint,util}/...
-
 test:
   stage: test
   script:
