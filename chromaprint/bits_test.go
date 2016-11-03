@@ -28,21 +28,27 @@ func TestUnpackInt5Array(t *testing.T) {
 }
 
 func BenchmarkUnpackInt3Array(b *testing.B) {
+	r := rand.New(rand.NewSource(1234))
 	data := make([]byte, 1024)
+	for i := range data {
+		data[i] = byte(r.Uint32() & 0xff)
+	}
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		for i := range data {
-			data[i] = byte(rand.Uint32() & 0xff)
-		}
 		unpackInt3Array(data)
 	}
 }
 
 func BenchmarkUnpackInt5Array(b *testing.B) {
+	r := rand.New(rand.NewSource(1234))
 	data := make([]byte, 1024)
+	for i := range data {
+		data[i] = byte(r.Uint32() & 0xff)
+	}
+	b.SetBytes(int64(len(data)))
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		for i := range data {
-			data[i] = byte(rand.Uint32() & 0xff)
-		}
 		unpackInt5Array(data)
 	}
 }
