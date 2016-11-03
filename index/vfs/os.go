@@ -1,8 +1,8 @@
 package vfs
 
 import (
-	"github.com/pkg/errors"
 	"github.com/dchest/safefile"
+	"github.com/pkg/errors"
 	"go4.org/lock"
 	"io"
 	"io/ioutil"

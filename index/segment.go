@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/util/intcompress"
+	"github.com/pkg/errors"
 	"io"
 	"log"
 	"math"
 	"sort"
 	"time"
-	"github.com/pkg/errors"
 )
 
 const (
