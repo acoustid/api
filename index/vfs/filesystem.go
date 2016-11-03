@@ -2,9 +2,9 @@
 package vfs
 
 import (
-	"errors"
 	"io"
 	"os"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -70,4 +70,8 @@ func IsNotExist(err error) bool {
 
 func IsExist(err error) bool {
 	return os.IsExist(err)
+}
+
+func IsLocked(err error) bool {
+	return errors.Cause(err) == ErrLocked
 }

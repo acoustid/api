@@ -3,7 +3,7 @@ package chromaprint
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -43,7 +43,7 @@ func ParseFingerprint(data []byte) (*Fingerprint, error) {
 func ParseFingerprintString(str string) (*Fingerprint, error) {
 	data, err := DecodeFingerprintString(str)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "decoding failed")
 	}
 	return ParseFingerprint(data)
 }
@@ -65,7 +65,7 @@ func ValidateFingerprintString(str string) bool {
 
 func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	if len(data) < 4 {
-		return ErrInvalidFingerprint
+		return errors.Wrap(ErrInvalidFingerprint, "encoded fingerprint is less than 4 bytes")
 	}
 
 	header := binary.BigEndian.Uint32(data)
@@ -75,7 +75,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	totalValues := int(header & 0xffffff)
 
 	if totalValues == 0 {
-		return ErrInvalidFingerprint
+		return errors.Wrap(ErrInvalidFingerprint, "fingerprint contains no items")
 	}
 
 	bits := unpackInt3Array(data[offset:])
@@ -95,13 +95,13 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	}
 
 	if numValues != totalValues {
-		return ErrInvalidFingerprint
+		return errors.Wrap(ErrInvalidFingerprint, "not enough data to decode normal bits")
 	}
 
 	if numExceptionalBits > 0 {
 		exceptionalBits := unpackInt5Array(data[offset:])
 		if len(exceptionalBits) != numExceptionalBits {
-			return ErrInvalidFingerprint
+			return errors.Wrap(ErrInvalidFingerprint, "not enough data to decode exceptional bits")
 		}
 		ei := 0
 		for bi, bit := range bits {

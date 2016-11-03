@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/util/intcompress"
@@ -13,6 +12,7 @@ import (
 	"math"
 	"sort"
 	"time"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -126,8 +126,7 @@ func (s *Segment) fileName() string {
 func (s *Segment) Remove(fs vfs.FileSystem) error {
 	name := s.fileName()
 	if err := fs.Remove(name); err != nil {
-		log.Printf("failed to remove segment file %v (%v)", name, err)
-		return err
+		return errors.Wrapf(err, "failed to remove segment file %v", name)
 	}
 	log.Printf("removed segment file %v", name)
 	return nil

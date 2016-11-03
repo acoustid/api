@@ -30,8 +30,8 @@ func (h *LookupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch format {
 	case JsonFormat:
-		fmt.Fprintf(w, "{ok}")
+		fmt.Fprint(w, "{ok}")
 	case XmlFormat:
-		fmt.Fprintf(w, "<count></count>")
+		fmt.Fprint(w, "<count></count>")
 	}
 }

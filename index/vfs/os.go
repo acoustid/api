@@ -1,7 +1,7 @@
 package vfs
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 	"github.com/dchest/safefile"
 	"go4.org/lock"
 	"io"
@@ -32,11 +32,11 @@ func OpenDir(dir string, create bool) (FileSystem, error) {
 			return nil, err
 		}
 	} else if !info.IsDir() {
-		return nil, ErrNotDirectory
+		return nil, errors.Errorf("%v is not a directory", dir)
 	}
 	dir, err = filepath.Abs(dir)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not get the absolute path")
 	}
 	return &osFS{root: dir}, nil
 }
@@ -44,7 +44,7 @@ func OpenDir(dir string, create bool) (FileSystem, error) {
 func CreateTempDir() (FileSystem, error) {
 	dir, err := ioutil.TempDir("", "tmpdir")
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create a temporary directory")
 	}
 	return &osFS{root: dir, tmp: true}, nil
 }

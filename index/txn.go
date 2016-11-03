@@ -1,7 +1,7 @@
 package index
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 	"math"
 )
 
@@ -31,7 +31,7 @@ func (txn *Transaction) AddDoc(docID uint32, terms []uint32) error {
 	if len(txn.values) > 1024*1024 {
 		err := txn.Flush()
 		if err != nil {
-			return err
+			return errors.Wrap(err, "flush failed")
 		}
 	}
 
@@ -49,7 +49,7 @@ func (txn *Transaction) Flush() error {
 
 	segment, err := txn.createSegment(NewValueSliceReader(txn.numDocs, txn.values))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create a new segment")
 	}
 
 	txn.manifest.AddSegment(segment)
@@ -75,12 +75,12 @@ func (txn *Transaction) Commit() error {
 
 	err := txn.Flush()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "flush failed")
 	}
 
 	err = txn.db.commit(txn)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "commit failed")
 	}
 
 	txn.committed = true

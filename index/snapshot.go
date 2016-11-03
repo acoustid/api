@@ -1,5 +1,7 @@
 package index
 
+import "github.com/pkg/errors"
+
 type Snapshot struct {
 	db       *DB
 	manifest *Manifest
@@ -27,7 +29,7 @@ func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
 	for i := 0; i < len(segments); i++ {
 		res := <-results
 		if res.err != nil {
-			return nil, res.err
+			return nil, errors.Wrap(res.err, "segment search failed")
 		}
 		for docID, count := range res.hits {
 			hits[docID] += count
