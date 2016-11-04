@@ -1,14 +1,15 @@
 package vfs
 
 import (
-	"github.com/dchest/safefile"
-	"github.com/pkg/errors"
-	"go4.org/lock"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dchest/safefile"
+	"github.com/pkg/errors"
+	"go4.org/lock"
 )
 
 type osFS struct {
@@ -16,10 +17,8 @@ type osFS struct {
 	tmp  bool
 }
 
-var (
-	ErrNotDirectory = errors.New("not a directory")
-)
-
+// OpenDir opens a FS restricted to a particular directory.
+// If the directory does not exist and the create parameter is true, it will be created.
 func OpenDir(dir string, create bool) (FileSystem, error) {
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -41,6 +40,8 @@ func OpenDir(dir string, create bool) (FileSystem, error) {
 	return &osFS{root: dir}, nil
 }
 
+// CreateTempDir creates a temporary directory and opens a FileSystem instance in it.
+// The directory will be deleted after calling Close.
 func CreateTempDir() (FileSystem, error) {
 	dir, err := ioutil.TempDir("", "tmpdir")
 	if err != nil {
