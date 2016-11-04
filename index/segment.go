@@ -73,18 +73,18 @@ func CreateSegment(fs vfs.FileSystem, id SegmentID, input ValueReader) (*Segment
 	name := s.fileName()
 	file, err := fs.CreateAtomicFile(name)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "create failed")
 	}
 	defer file.Close()
 
 	err = s.writeData(file, input)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "data writing failed")
 	}
 
 	err = file.Commit()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "file commit failed")
 	}
 
 	log.Printf("completed segment %v with data file '%v' (docs=%v, blocks=%v, checksum=0x%08x, duration=%s)",
@@ -93,7 +93,7 @@ func CreateSegment(fs vfs.FileSystem, id SegmentID, input ValueReader) (*Segment
 	s.reader, err = fs.OpenFile(name)
 	if err != nil {
 		s.Remove(fs)
-		return nil, err
+		return nil, errors.Wrapf(err, "open failed")
 	}
 
 	return s, nil

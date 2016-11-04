@@ -1,6 +1,8 @@
 package index
 
-import "github.com/pkg/errors"
+import (
+	"github.com/pkg/errors"
+)
 
 type Snapshot struct {
 	db       *DB
@@ -10,19 +12,21 @@ type Snapshot struct {
 func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
 	SortUint32s(query)
 
+	segments := s.manifest.Segments
+
 	type result struct {
 		hits map[uint32]int
 		err  error
 	}
-	results := make(chan result)
+	results := make(chan result, len(segments))
 
-	segments := s.manifest.Segments
 	for _, segment := range segments {
-		go func(segment *Segment) {
+		segment := segment
+		go func() {
 			hits := make(map[uint32]int)
 			err := segment.Search(query, func(docID uint32) { hits[docID] += 1 })
 			results <- result{hits: hits, err: err}
-		}(segment)
+		}()
 	}
 
 	hits := make(map[uint32]int)
