@@ -138,10 +138,11 @@ func (s *Segment) Remove(fs vfs.FileSystem) error {
 	return nil
 }
 
-func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) ([]Value, error) {
-	n := len(input)
+func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) (n int, err error) {
+	n = len(input)
 	if n == 0 {
-		return input, ErrNoData
+		err = ErrNoData
+		return
 	}
 
 	buf1 := make([]byte, s.Meta.BlockSize)
@@ -185,29 +186,29 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) ([]Value, erro
 	binary.LittleEndian.PutUint16(header[2:], uint16(ptr1))
 	binary.LittleEndian.PutUint32(header[4:], baseDocID)
 
-	_, err := writer.Write(header[:])
+	_, err = writer.Write(header[:])
 	if err != nil {
-		return input, err
+		return 0, err
 	}
 
 	_, err = writer.Write(buf1[:ptr1])
 	if err != nil {
-		return input, err
+		return 0, err
 	}
 
 	_, err = writer.Write(buf2[:ptr2])
 	if err != nil {
-		return input, err
+		return 0, err
 	}
 
 	for i := BlockHeaderSize + ptr1 + ptr2; i < s.Meta.BlockSize; i++ {
 		err = writer.WriteByte(0)
 		if err != nil {
-			return input, err
+			return 0, err
 		}
 	}
 
-	return input[n:], nil
+	return n, nil
 }
 
 func (s *Segment) writeData(file io.Writer, it ValueReader) error {
@@ -215,23 +216,46 @@ func (s *Segment) writeData(file io.Writer, it ValueReader) error {
 
 	s.Meta.NumDocs = it.NumDocs()
 
-	offset := 0
-	input := make([]Value, (s.Meta.BlockSize-BlockHeaderSize)/2)
+	maxValuesPerBlock := (s.Meta.BlockSize-BlockHeaderSize)/2
+	remaining := make([]Value, 0, maxValuesPerBlock)
 	for {
-		n, err := it.ReadValues(input[offset:])
-		if err != nil {
+		block, err := it.ReadBlock()
+		if err != nil && err != io.EOF {
 			return err
 		}
-		in := input[:offset+n]
-		if len(in) == 0 {
+		if len(block) == 0 {
+			for len(remaining) > 0 {
+				n, err := s.writeBlock(writer, remaining)
+				if err != nil {
+					return err
+				}
+				remaining = remaining[n:]
+			}
 			break
 		}
-		remaining, err := s.writeBlock(writer, in)
-		if err != nil {
-			return err
+		for len(remaining) > 0 && len(remaining)+len(block) >= maxValuesPerBlock {
+			m := len(remaining)
+			remaining = append(remaining, block[:maxValuesPerBlock-m:len(block)]...)
+			n, err := s.writeBlock(writer, remaining)
+			if err != nil {
+				return err
+			}
+			if n >= m {
+				block = block[n-m:]
+				remaining = remaining[:0]
+			} else {
+				n := copy(remaining, remaining[n:m])
+				remaining = remaining[:n]
+			}
 		}
-		copy(input, remaining)
-		offset = len(remaining)
+		for len(block) >= maxValuesPerBlock {
+			n, err := s.writeBlock(writer, block)
+			if err != nil {
+				return err
+			}
+			block = block[n:]
+		}
+		remaining = append(remaining, block...)
 	}
 
 	err := binary.Write(writer, binary.LittleEndian, s.blockIndex)

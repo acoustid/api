@@ -1,11 +1,11 @@
 package index
 
 import (
-	"go4.org/sort"
-	"math"
-	"log"
-	"fmt"
 	"bytes"
+	"fmt"
+	"go4.org/sort"
+	"log"
+	"math"
 )
 
 // Merge provides information necessary to perform a merge operation, resulting in one new segment.
@@ -189,6 +189,3 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 	return
 }
 
-func MergeSegments(segments []*Segment) error {
-	return nil
-}
