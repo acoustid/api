@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func genUnpackIntArrayInner(bits int, sblock int, lines []string) []string {
+func genUnpackIntArrayInner(bits int, sblock int, lines []string, pack bool) []string {
 	dblock := sblock * 8 / bits
 
 	var vtype string
@@ -33,10 +33,12 @@ func genUnpackIntArrayInner(bits int, sblock int, lines []string) []string {
 		}
 		src[i] = s
 	}
-	lines = append(lines, fmt.Sprintf("\t\tval := %s", strings.Join(src, " | ")))
+	if pack {
+		lines = append(lines, fmt.Sprintf("\t\tval := %s", strings.Join(src, " | ")))
+	}
 	lines = append(lines, fmt.Sprintf("\t\td := dst[n : n+%d : len(dst)]", dblock))
 	for i := 0; i < dblock; i++ {
-		lines = append(lines, fmt.Sprintf("\t\td[%d] = uint8((val >> %d) & 0x%x)", i, bits*i, (1<<uint(bits))-1))
+		lines = append(lines, fmt.Sprintf("\t\td[%d] = uint8((val >> %d) & %d)", i, bits*i, (1<<uint(bits))-1))
 	}
 	lines = append(lines, fmt.Sprintf("\t\tn += %d", dblock))
 	return lines
@@ -55,15 +57,20 @@ func genUnpackIntArray(bits int) string {
 	lines = append(lines, fmt.Sprintf("func UnpackUint%dSlice(src []byte) []uint8 {", bits))
 	lines = append(lines, fmt.Sprintf("\tdst := make([]uint8, (len(src)*8)/%d)", bits))
 	lines = append(lines, fmt.Sprintf("\tn := 0"))
-	lines = append(lines, fmt.Sprintf("\tfor len(src) >= %d {", sblock))
-	lines = genUnpackIntArrayInner(bits, sblock, lines)
-	lines = append(lines, fmt.Sprintf("\t\tsrc = src[%d:]", sblock))
+	if sblock == 1 {
+		lines = append(lines, fmt.Sprintf("\tfor _, val := range src {"))
+		lines = genUnpackIntArrayInner(bits, sblock, lines, false)
+	} else {
+		lines = append(lines, fmt.Sprintf("\tfor len(src) >= %d {", sblock))
+		lines = genUnpackIntArrayInner(bits, sblock, lines, true)
+		lines = append(lines, fmt.Sprintf("\t\tsrc = src[%d:]", sblock))
+	}
 	lines = append(lines, "\t}")
 	if sblock > 1 {
 		lines = append(lines, fmt.Sprintf("\tswitch len(src) {"))
 		for i := sblock - 1; i > 0; i-- {
 			lines = append(lines, fmt.Sprintf("\tcase %d:", i))
-			lines = genUnpackIntArrayInner(bits, i, lines)
+			lines = genUnpackIntArrayInner(bits, i, lines, true)
 		}
 		lines = append(lines, "\t}")
 	}
