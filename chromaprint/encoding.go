@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 
 	"github.com/pkg/errors"
+	"github.com/acoustid/go-acoustid/util/intcompress"
 )
 
 // Fingerprint contains raw fingerprint data.
@@ -78,7 +79,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 		return errors.New("empty")
 	}
 
-	bits := unpackInt3Array(data[offset:])
+	bits := intcompress.UnpackUint3Slice(data[offset:])
 	numValues := 0
 	numExceptionalBits := 0
 	for bi, bit := range bits {
@@ -99,7 +100,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	}
 
 	if numExceptionalBits > 0 {
-		exceptionalBits := unpackInt5Array(data[offset:])
+		exceptionalBits := intcompress.UnpackUint5Slice(data[offset:])
 		if len(exceptionalBits) != numExceptionalBits {
 			return errors.New("not enough data to decode exceptional bits")
 		}
@@ -115,7 +116,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	if fp != nil {
 		hashes := make([]uint32, totalValues)
 		hi := 0
-		lastBit := int8(0)
+		var lastBit uint8
 		for _, bit := range bits {
 			if bit == 0 {
 				if hi > 0 {
