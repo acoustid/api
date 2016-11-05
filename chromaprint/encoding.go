@@ -126,7 +126,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 				hi++
 			} else {
 				lastBit += bit
-				hashes[hi] |= 1 << uint(lastBit-1)
+				hashes[hi] |= 1 << (lastBit-1)
 			}
 		}
 		fp.Version = version
