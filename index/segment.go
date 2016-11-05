@@ -57,6 +57,12 @@ type Segment struct {
 	reader     vfs.InputFile
 }
 
+// Size returns the estimated size of the segment file in bytes.  The actual file size might differ.
+// This calculation is done based on block statistics.
+func (s *Segment) Size() int {
+	return s.Meta.NumBlocks * (4 + s.Meta.BlockSize)
+}
+
 func CreateSegment(fs vfs.FileSystem, id SegmentID, input ValueReader) (*Segment, error) {
 	s := &Segment{
 		ID: id,
