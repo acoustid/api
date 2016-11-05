@@ -5,7 +5,7 @@ import (
 	"math"
 	"log"
 	"fmt"
-	"strings"
+	"bytes"
 )
 
 // Merge provides information necessary to perform a merge operation, resulting in one new segment.
@@ -13,6 +13,22 @@ type Merge struct {
 	Segments []*Segment
 	Score    float64
 	Size     int
+}
+
+func (m Merge) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("{Segments: [")
+	for i, s := range m.Segments {
+		if i == 0 {
+			buf.WriteString(fmt.Sprintf("%v", s.ID))
+		} else {
+			buf.WriteString(fmt.Sprintf(" %v", s.ID))
+		}
+	}
+	buf.WriteString(fmt.Sprintf("], Score: %v", m.Size))
+	buf.WriteString(fmt.Sprintf(", Size: %v", m.Size))
+	buf.WriteString("}")
+	return buf.String()
 }
 
 // MergePolicy determines a sequence of merge operations.
@@ -91,11 +107,7 @@ func (mp *TieredMergePolicy) findBestMerge(segments []*Segment, maxSize int) (be
 		merge.Score = skew * math.Pow(float64(mergeSize), 0.05)
 
 		if mp.Verbose {
-			var ms []string
-			for _, s := range merge.Segments {
-				ms = append(ms, fmt.Sprintf("%s", s.ID))
-			}
-			log.Printf("FindMerges: maybe merge segments=%v size=%v score=%v skew=%v", strings.Join(ms, ","), merge.Size, merge.Score, skew)
+			log.Printf("FindMerges: merge %s", merge)
 		}
 
 		if bestMerge == nil || merge.Score < bestMerge.Score {
@@ -121,7 +133,7 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 			} else if size < mp.FloorSegmentSize {
 				extra += " [floored]"
 			}
-			log.Printf("FindMerges: seg=%s size=%d%s", segment.ID, segment.Size(), extra)
+			log.Printf("FindMerges: Segment: %s, Size: %d%s", segment.ID, segment.Size(), extra)
 		}
 		if segment.Size() <= maxSize/2 {
 			segments = append(segments, segment)
@@ -148,44 +160,30 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 		levelSize *= mp.MaxMergeAtOnce
 	}
 
-	count := len(segments)
-
-	if mp.Verbose {
-		log.Printf("FindMerges: count=%v allowed=%v eligible=%v", count, allowedSegmentCount, len(segments))
-	}
-
 	// Find possible merges until we run out of candidates.
 	for len(segments) > allowedSegmentCount {
 		merge := mp.findBestMerge(segments, maxSize)
 		if merge == nil {
 			break
 		}
-		if mp.Verbose {
-			var ms []string
-			for _, s := range merge.Segments {
-				ms = append(ms, fmt.Sprintf("%s", s.ID))
-			}
-			log.Printf("FindMerges: merge segments=%v size=%v score=%v", strings.Join(ms, ","), merge.Size, merge.Score)
-		}
 		merges = append(merges, merge)
 
-		// Remove the merged segments from the list of candidates to be merged next.
-		remove := make(map[SegmentID]bool, len(merge.Segments))
-		for _, segment := range merge.Segments {
-			remove[segment.ID] = true
+		if mp.Verbose {
+			log.Printf("FindMerges: merge %s", merge)
 		}
-		i := 0
+
+		// Filter out segments that we just selected to be merged.
+		removed := make(map[SegmentID]bool, len(merge.Segments))
+		for _, segment := range merge.Segments {
+			removed[segment.ID] = true
+		}
+		eligible := segments[:0]
 		for _, segment := range segments {
-			if !remove[segment.ID] {
-				segments[i] = segment
-				i++
+			if !removed[segment.ID] {
+				eligible = append(eligible, segment)
 			}
 		}
-		segments = segments[:i]
-
-		if mp.Verbose {
-			log.Printf("FindMerges: count=%v allowed=%v eligible=%v", count, allowedSegmentCount, len(segments))
-		}
+		segments = eligible
 	}
 
 	return
