@@ -2,6 +2,7 @@ package index
 
 import (
 	"github.com/pkg/errors"
+	"go4.org/sort"
 )
 
 type Snapshot struct {
@@ -10,7 +11,7 @@ type Snapshot struct {
 }
 
 func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
-	SortUint32s(query)
+	sort.Slice(query, func(i, j int) bool { return query[i] < query[j] })
 
 	segments := s.manifest.Segments
 

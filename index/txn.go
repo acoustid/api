@@ -9,9 +9,10 @@ type Transaction struct {
 	Snapshot
 	counter   uint8
 	committed bool
-	values    []Value
-	numDocs   int
+	buffer    ItemBuffer
 }
+
+const MaxBufferedItems = 10 * 1024 * 1024
 
 var (
 	ErrCommitted       = errors.New("transaction is already committed")
@@ -23,12 +24,9 @@ func (txn *Transaction) AddDoc(docID uint32, terms []uint32) error {
 		return ErrCommitted
 	}
 
-	for _, term := range terms {
-		txn.values = append(txn.values, Value{DocID: docID, Term: term})
-	}
-	txn.numDocs += 1
+	txn.buffer.Add(docID, terms)
 
-	if len(txn.values) > 1024*1024 {
+	if txn.buffer.NumItems() > MaxBufferedItems {
 		err := txn.Flush()
 		if err != nil {
 			return errors.Wrap(err, "flush failed")
@@ -38,29 +36,44 @@ func (txn *Transaction) AddDoc(docID uint32, terms []uint32) error {
 	return nil
 }
 
+func (txn *Transaction) NumDocs() int {
+	n := txn.buffer.NumDocs()
+	for _, segment := range txn.manifest.Segments {
+		n += segment.Meta.NumDocs
+	}
+	return n
+}
+
+func (txn *Transaction) NumItems() int {
+	n := txn.buffer.NumItems()
+	for _, segment := range txn.manifest.Segments {
+		n += segment.Meta.NumItems
+	}
+	return n
+}
+
 func (txn *Transaction) Flush() error {
 	if txn.committed {
 		return ErrCommitted
 	}
 
-	if len(txn.values) == 0 {
+	if txn.buffer.Empty() {
 		return nil
 	}
 
-	segment, err := txn.createSegment(NewValueSliceReader(txn.numDocs, txn.values))
+	segment, err := txn.createSegment(txn.buffer.Reader())
 	if err != nil {
 		return errors.Wrap(err, "failed to create a new segment")
 	}
 
 	txn.manifest.AddSegment(segment)
 
-	txn.values = txn.values[:0]
-	txn.numDocs = 0
+	txn.buffer.Reset()
 
 	return nil
 }
 
-func (txn *Transaction) createSegment(input ValueReader) (*Segment, error) {
+func (txn *Transaction) createSegment(input ItemReader) (*Segment, error) {
 	if txn.counter == math.MaxUint8 {
 		return nil, ErrTooManySegments
 	}

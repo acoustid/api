@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/acoustid/go-acoustid/util/intcompress"
+	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -44,10 +44,12 @@ type SegmentMeta struct {
 	BlockSize int    `json:"blocksize"`
 	NumBlocks int    `json:"nblocks"`
 	NumDocs   int    `json:"ndocs"`
-	NumValues int    `json:"nvalues"`
+	NumItems  int    `json:"nitems"`
 	Checksum  uint32 `json:"checksum"`
 	MinTerm   uint32 `json:"minterm"`
 	MaxTerm   uint32 `json:"maxterm"`
+	MinDocID  uint32 `json:"mindocid"`
+	MaxDocID  uint32 `json:"maxdocid"`
 }
 
 type Segment struct {
@@ -63,7 +65,7 @@ func (s *Segment) Size() int {
 	return s.Meta.NumBlocks * (4 + s.Meta.BlockSize)
 }
 
-func CreateSegment(fs vfs.FileSystem, id SegmentID, input ValueReader) (*Segment, error) {
+func CreateSegment(fs vfs.FileSystem, id SegmentID, input ItemReader) (*Segment, error) {
 	s := &Segment{
 		ID: id,
 		Meta: SegmentMeta{
@@ -138,7 +140,7 @@ func (s *Segment) Remove(fs vfs.FileSystem) error {
 	return nil
 }
 
-func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) (n int, err error) {
+func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err error) {
 	n = len(input)
 	if n == 0 {
 		err = ErrNoData
@@ -170,7 +172,7 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) (n int, err er
 		s.Meta.Checksum += val.Term + val.DocID
 	}
 
-	s.Meta.NumValues += n
+	s.Meta.NumItems += n
 	s.Meta.NumBlocks += 1
 	s.blockIndex = append(s.blockIndex, input[0].Term)
 
@@ -211,13 +213,15 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Value) (n int, err er
 	return n, nil
 }
 
-func (s *Segment) writeData(file io.Writer, it ValueReader) error {
+func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	writer := bufio.NewWriter(file)
 
 	s.Meta.NumDocs = it.NumDocs()
+	s.Meta.MinDocID = it.MinDocID()
+	s.Meta.MaxDocID = it.MaxDocID()
 
-	maxValuesPerBlock := (s.Meta.BlockSize-BlockHeaderSize)/2
-	remaining := make([]Value, 0, maxValuesPerBlock)
+	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
+	remaining := make([]Item, 0, maxItemsPerBlock)
 	for {
 		block, err := it.ReadBlock()
 		if err != nil && err != io.EOF {
@@ -233,9 +237,9 @@ func (s *Segment) writeData(file io.Writer, it ValueReader) error {
 			}
 			break
 		}
-		for len(remaining) > 0 && len(remaining)+len(block) >= maxValuesPerBlock {
+		for len(remaining) > 0 && len(remaining)+len(block) >= maxItemsPerBlock {
 			m := len(remaining)
-			remaining = append(remaining, block[:maxValuesPerBlock-m:len(block)]...)
+			remaining = append(remaining, block[:maxItemsPerBlock -m:len(block)]...)
 			n, err := s.writeBlock(writer, remaining)
 			if err != nil {
 				return err
@@ -248,7 +252,7 @@ func (s *Segment) writeData(file io.Writer, it ValueReader) error {
 				remaining = remaining[:n]
 			}
 		}
-		for len(block) >= maxValuesPerBlock {
+		for len(block) >= maxItemsPerBlock {
 			n, err := s.writeBlock(writer, block)
 			if err != nil {
 				return err
@@ -317,7 +321,7 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 	return nil
 }
 
-func (s *Segment) ReadBlock(i int) ([]Value, error) {
+func (s *Segment) ReadBlock(i int) ([]Item, error) {
 	if i >= s.Meta.NumBlocks {
 		return nil, ErrBlockNotFound
 	}
@@ -333,7 +337,7 @@ func (s *Segment) ReadBlock(i int) ([]Value, error) {
 	}
 
 	n := int(binary.LittleEndian.Uint16(data))
-	values := make([]Value, n)
+	values := make([]Item, n)
 
 	ptr := BlockHeaderSize
 

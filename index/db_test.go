@@ -7,7 +7,7 @@ import (
 	"math/rand"
 )
 
-func TestIndex(t *testing.T) {
+func TestDB(t *testing.T) {
 	fs := vfs.CreateMemDir()
 
 	db, err := Open(fs, true)

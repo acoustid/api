@@ -11,18 +11,18 @@ import (
 const ManifestFilename = "manifest.json"
 
 type Manifest struct {
-	ID        uint32     `json:"id"`
-	NumDocs   int        `json:"ndocs"`
-	NumValues int        `json:"nvalues"`
-	Checksum  uint32     `json:"checksum"`
-	Segments  []*Segment `json:"segments"`
+	ID       uint32     `json:"id"`
+	NumDocs  int        `json:"ndocs"`
+	NumItems int        `json:"nitems"`
+	Checksum uint32     `json:"checksum"`
+	Segments []*Segment `json:"segments"`
 }
 
 func (m *Manifest) Clone() *Manifest {
 	return &Manifest{
 		ID:        m.ID,
 		NumDocs:   m.NumDocs,
-		NumValues: m.NumValues,
+		NumItems: m.NumItems,
 		Checksum:  m.Checksum,
 		Segments:  append([]*Segment{}, m.Segments...),
 	}
@@ -30,7 +30,7 @@ func (m *Manifest) Clone() *Manifest {
 
 func (m *Manifest) AddSegment(s *Segment) {
 	m.NumDocs += s.Meta.NumDocs
-	m.NumValues += s.Meta.NumValues
+	m.NumItems += s.Meta.NumItems
 	m.Checksum += s.Meta.Checksum
 	m.Segments = append(m.Segments, s)
 }
@@ -40,7 +40,7 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 	for _, s2 := range m.Segments {
 		if s2 == s {
 			m.NumDocs -= s2.Meta.NumDocs
-			m.NumValues -= s2.Meta.NumValues
+			m.NumItems -= s2.Meta.NumItems
 			m.Checksum -= s2.Meta.Checksum
 		} else {
 			segments = append(segments, s2)
