@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/acoustid/go-acoustid/util/bitset"
 	"github.com/acoustid/go-acoustid/util/intcompress"
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
@@ -41,11 +42,12 @@ func (id SegmentID) String() string {
 }
 
 type SegmentMeta struct {
+	Format    int    `json:"format"`
+	Checksum  uint32 `json:"checksum"`
 	BlockSize int    `json:"blocksize"`
 	NumBlocks int    `json:"nblocks"`
 	NumDocs   int    `json:"ndocs"`
 	NumItems  int    `json:"nitems"`
-	Checksum  uint32 `json:"checksum"`
 	MinTerm   uint32 `json:"minterm"`
 	MaxTerm   uint32 `json:"maxterm"`
 	MinDocID  uint32 `json:"mindocid"`
@@ -56,6 +58,7 @@ type Segment struct {
 	ID         SegmentID   `json:"id"`
 	Meta       SegmentMeta `json:"meta"`
 	blockIndex []uint32
+	docs       *bitset.FixedBitSet
 	reader     vfs.InputFile
 }
 
@@ -110,19 +113,32 @@ func CreateSegment(fs vfs.FileSystem, id SegmentID, input ItemReader) (*Segment,
 func (s *Segment) Open(fs vfs.FileSystem) error {
 	file, err := fs.OpenFile(s.fileName())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "open failed")
 	}
-	blockIndex := make([]uint32, s.Meta.NumDocs)
+
 	_, err = file.Seek(int64(s.Meta.BlockSize*s.Meta.NumBlocks), 0)
 	if err != nil {
-		return err
+		file.Close()
+		return errors.Wrap(err, "seek failed")
 	}
+
+	blockIndex := make([]uint32, s.Meta.NumDocs)
 	err = binary.Read(file, binary.LittleEndian, blockIndex)
 	if err != nil {
-		return err
+		file.Close()
+		return errors.Wrap(err, "block index read failed")
 	}
-	s.reader = file
+
+	docs := bitset.New(s.Meta.MinDocID, s.Meta.MinDocID)
+	_, err = docs.ReadFrom(file)
+	if err != nil {
+		file.Close()
+		return errors.Wrap(err, "docID set read failed")
+	}
+
 	s.blockIndex = blockIndex
+	s.docs = docs
+	s.reader = file
 	return nil
 }
 
@@ -159,17 +175,18 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 	}
 
 	var lastTerm uint32
-	for i, val := range input {
-		n1 := intcompress.PutUvarint32(buf1[ptr1:], val.Term-lastTerm)
-		n2 := intcompress.PutUvarint32(buf2[ptr2:], val.DocID-baseDocID)
+	for i, it := range input {
+		n1 := intcompress.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
+		n2 := intcompress.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
 		if BlockHeaderSize+ptr1+ptr2+n1+n2 >= s.Meta.BlockSize {
 			n = i
 			break
 		}
 		ptr1 += n1
 		ptr2 += n2
-		lastTerm = val.Term
-		s.Meta.Checksum += val.Term + val.DocID
+		lastTerm = it.Term
+		s.Meta.Checksum += it.Term + it.DocID
+		s.docs.Add(it.DocID)
 	}
 
 	s.Meta.NumItems += n
@@ -220,6 +237,8 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	s.Meta.MinDocID = it.MinDocID()
 	s.Meta.MaxDocID = it.MaxDocID()
 
+	s.docs = bitset.New(s.Meta.MinDocID, s.Meta.MinDocID)
+
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)
 	for {
@@ -239,7 +258,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		}
 		for len(remaining) > 0 && len(remaining)+len(block) >= maxItemsPerBlock {
 			m := len(remaining)
-			remaining = append(remaining, block[:maxItemsPerBlock -m:len(block)]...)
+			remaining = append(remaining, block[:maxItemsPerBlock-m:len(block)]...)
 			n, err := s.writeBlock(writer, remaining)
 			if err != nil {
 				return err
@@ -264,7 +283,12 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 
 	err := binary.Write(writer, binary.LittleEndian, s.blockIndex)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "block index write failed")
+	}
+
+	_, err = s.docs.WriteTo(writer)
+	if err != nil {
+		return errors.Wrap(err, "docID set write failed")
 	}
 
 	writer.WriteByte(byte(0))
