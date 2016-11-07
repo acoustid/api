@@ -130,7 +130,7 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 	}
 
 	docs := bitset.New(s.Meta.MinDocID, s.Meta.MinDocID)
-	_, err = docs.ReadFrom(file)
+	err = docs.Read(file)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "docID set read failed")
@@ -286,7 +286,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		return errors.Wrap(err, "block index write failed")
 	}
 
-	_, err = s.docs.WriteTo(writer)
+	err = s.docs.Write(writer)
 	if err != nil {
 		return errors.Wrap(err, "docID set write failed")
 	}

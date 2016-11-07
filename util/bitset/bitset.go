@@ -46,18 +46,10 @@ func (bs *FixedBitSet) Contains(i uint32) bool {
 	return bs.data[j]&m != 0
 }
 
-func (bs *FixedBitSet) WriteTo(w io.Writer) (int64, error) {
-	err := binary.Write(w, binary.LittleEndian, bs.data)
-	if err != nil {
-		return 0, err
-	}
-	return int64(binary.Size(bs.data)), nil
+func (bs *FixedBitSet) Write(w io.Writer) error {
+	return binary.Write(w, binary.LittleEndian, bs.data)
 }
 
-func (bs *FixedBitSet) ReadFrom(r io.Reader) (int64, error) {
-	err := binary.Read(r, binary.LittleEndian, bs.data)
-	if err != nil {
-		return 0, err
-	}
-	return int64(binary.Size(bs.data)), nil
+func (bs *FixedBitSet) Read(r io.Reader) error {
+	return binary.Read(r, binary.LittleEndian, bs.data)
 }
