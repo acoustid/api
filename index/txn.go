@@ -22,7 +22,7 @@ var (
 	ErrTooManySegments = errors.New("too many segments")
 )
 
-func (txn *Transaction) AddDoc(docID uint32, terms []uint32) error {
+func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	if txn.committed {
 		return ErrCommitted
 	}

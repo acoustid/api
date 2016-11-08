@@ -6,9 +6,12 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"github.com/pkg/errors"
 )
 
 const ManifestFilename = "manifest.json"
+
+var ErrAlreadyClosed = errors.New("already closed")
 
 type Manifest struct {
 	ID       uint32     `json:"id"`
@@ -54,6 +57,7 @@ type DB struct {
 	mu       sync.Mutex
 	txid     uint32
 	manifest atomic.Value
+	closed bool
 }
 
 func Open(fs vfs.FileSystem, create bool) (*DB, error) {
@@ -87,24 +91,43 @@ func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 }
 
 func (db *DB) Close() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.closed = true
 }
 
 func (db *DB) Add(docid uint32, hashes []uint32) error {
-	txn := db.newTransaction()
-	defer txn.Close()
-
-	err := txn.AddDoc(docid, hashes)
-	if err != nil {
-		return err
-	}
-
-	return txn.Commit()
+	return db.RunInTransaction(func (txn *Transaction) error { return txn.Add(docid, hashes) })
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 	snapshot := db.newSnapshot(false)
 	defer snapshot.Close()
 	return snapshot.Search(query)
+}
+
+// Snapshot creates a consistent read-only view of the DB.
+func (db *DB) Snapshot() *Snapshot {
+	return db.newSnapshot(false)
+}
+
+// Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
+func (db *DB) Transaction() *Transaction {
+	return &Transaction{Snapshot: db.newSnapshot(true), fs: db.fs, commitFn: db.commit}
+}
+
+// RunInTransaction executes the given function in a transaction. If the function does not return an error,
+// the transaction will be automatically committed.
+func (db *DB) RunInTransaction(fn func (txn *Transaction) error) error {
+	txn := db.Transaction()
+	defer txn.Close()
+
+	err := fn(txn)
+	if err != nil {
+		return err
+	}
+
+	return txn.Commit()
 }
 
 func (db *DB) newSnapshot(write bool) *Snapshot {
@@ -117,13 +140,13 @@ func (db *DB) newSnapshot(write bool) *Snapshot {
 	return &Snapshot{manifest: manifest}
 }
 
-func (db *DB) newTransaction() *Transaction {
-	return &Transaction{Snapshot: db.newSnapshot(true), fs: db.fs, commitFn: db.commit}
-}
-
 func (db *DB) commit(manifest *Manifest) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if db.closed {
+		return ErrAlreadyClosed
+	}
 
 	file, err := db.fs.CreateAtomicFile("manifest.json")
 	if err != nil {
