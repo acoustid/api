@@ -7,7 +7,7 @@ import (
 )
 
 type Transaction struct {
-	Snapshot
+	*Snapshot
 	fs        vfs.FileSystem
 	commitFn  func(m *Manifest) error
 	committed bool

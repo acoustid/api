@@ -102,25 +102,23 @@ func (db *DB) Add(docid uint32, hashes []uint32) error {
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
-	snapshot := db.newSnapshot()
+	snapshot := db.newSnapshot(false)
 	defer snapshot.Close()
 	return snapshot.Search(query)
 }
 
-func (db *DB) newSnapshot() *Snapshot {
+func (db *DB) newSnapshot(write bool) *Snapshot {
 	manifest := db.manifest.Load().(*Manifest)
+	if write {
+		manifest = manifest.Clone()
+		manifest.ID = atomic.AddUint32(&db.txid, 1)
+		log.Printf("started transaction %d", manifest.ID)
+	}
 	return &Snapshot{manifest: manifest}
 }
 
 func (db *DB) newTransaction() *Transaction {
-	manifest := db.manifest.Load().(*Manifest).Clone()
-	manifest.ID = atomic.AddUint32(&db.txid, 1)
-	log.Printf("started transaction %d", manifest.ID)
-	return &Transaction{
-		Snapshot: Snapshot{manifest: manifest},
-		fs: db.fs,
-		commitFn: db.commit,
-	}
+	return &Transaction{Snapshot: db.newSnapshot(true), fs: db.fs, commitFn: db.commit}
 }
 
 func (db *DB) commit(manifest *Manifest) error {
