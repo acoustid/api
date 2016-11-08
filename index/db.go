@@ -122,7 +122,11 @@ func (db *DB) Close() {
 }
 
 func (db *DB) Add(docID uint32, hashes []uint32) error {
-	return db.RunInTransaction(func(txn *Transaction) error { return txn.Add(docID, hashes) })
+	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Add(docID, hashes) })
+}
+
+func (db *DB) Delete(docID uint32) error {
+	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Delete(docID) })
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
@@ -132,18 +136,18 @@ func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 }
 
 // Snapshot creates a consistent read-only view of the DB.
-func (db *DB) Snapshot() *Snapshot {
+func (db *DB) Snapshot() Searcher {
 	return db.newSnapshot(false)
 }
 
 // Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
-func (db *DB) Transaction() *Transaction {
+func (db *DB) Transaction() BulkWriter {
 	return &Transaction{Snapshot: db.newSnapshot(true), fs: db.fs, commitFn: db.commit}
 }
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
 // the transaction will be automatically committed.
-func (db *DB) RunInTransaction(fn func(txn *Transaction) error) error {
+func (db *DB) RunInTransaction(fn func(txn BulkWriter) error) error {
 	txn := db.Transaction()
 	defer txn.Close()
 

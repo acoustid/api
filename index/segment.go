@@ -291,7 +291,11 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		return errors.Wrap(err, "docID set write failed")
 	}
 
-	writer.WriteByte(byte(0))
+	err = writer.WriteByte(byte(0))
+	if err != nil {
+		return err
+	}
+
 	err = json.NewEncoder(writer).Encode(s.Meta)
 	if err != nil {
 		return err

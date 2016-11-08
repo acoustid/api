@@ -9,7 +9,7 @@ import "io"
 type Searcher interface {
 	io.Closer
 
-	Search(terms []uint32, collector func (docID uint32, hits int) bool) error
+	Search(terms []uint32) (map[uint32]int, error)
 }
 
 type Writer interface {

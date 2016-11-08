@@ -34,6 +34,9 @@ func TestDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hits, map[uint32]int{1234: 2})
 
+	err = db.Delete(1234)
+	require.NoError(t, err)
+
 	db2, err := Open(fs, false)
 	require.NoError(t, err)
 	defer db2.Close()

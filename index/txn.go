@@ -4,6 +4,7 @@ import (
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"math"
+	"log"
 )
 
 type Transaction struct {
@@ -36,6 +37,40 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 		}
 	}
 
+	return nil
+}
+
+func (txn *Transaction) Delete(docID uint32) error {
+	if txn.committed {
+		return ErrCommitted
+	}
+
+	for _, segment := range txn.manifest.Segments {
+		if segment.docs.Contains(docID) {
+			log.Printf("found %v in segment %v", docID, segment.ID)
+		}
+	}
+
+	return errors.New("not implmented")
+}
+
+func (txn *Transaction) Update(docID uint32, terms []uint32) error {
+	err := txn.Delete(docID)
+	if err != nil {
+		return errors.Wrap(err, "delete failed")
+	}
+	err = txn.Add(docID, terms)
+	if err != nil {
+		return errors.Wrap(err, "add failed")
+	}
+	return nil
+}
+
+func (txn *Transaction) Truncate() error {
+	txn.buffer.Reset()
+	txn.manifest.Segments = txn.manifest.Segments[:0]
+	txn.manifest.NumDocs = 0
+	txn.manifest.NumItems = 0
 	return nil
 }
 
