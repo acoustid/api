@@ -40,3 +40,24 @@ func TestMergeItemReaders(t *testing.T) {
 	}
 	assert.Equal(t, expected, items)
 }
+
+func TestItemBuffer_Delete(t *testing.T) {
+	var buf ItemBuffer
+	buf.Add(1, []uint32{100, 101})
+	buf.Add(3, []uint32{300, 301})
+	require.False(t, buf.Delete(2))
+	require.Equal(t, 2, buf.NumDocs())
+	require.Equal(t, 4, buf.NumItems())
+	require.Equal(t, uint32(1), buf.MinDocID())
+	require.Equal(t, uint32(3), buf.MaxDocID())
+	require.True(t, buf.Delete(3))
+	require.Equal(t, 1, buf.NumDocs())
+	require.Equal(t, 2, buf.NumItems())
+	require.Equal(t, uint32(1), buf.MinDocID())
+	require.Equal(t, uint32(1), buf.MaxDocID())
+	require.False(t, buf.Delete(3))
+	require.Equal(t, 1, buf.NumDocs())
+	require.Equal(t, 2, buf.NumItems())
+	require.Equal(t, uint32(1), buf.MinDocID())
+	require.Equal(t, uint32(1), buf.MaxDocID())
+}

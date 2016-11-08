@@ -41,3 +41,46 @@ func TestDB(t *testing.T) {
 	require.NoError(t, err)
 	defer db2.Close()
 }
+
+func TestDB_Transaction_NoCommit(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	txn := db.Transaction()
+	require.NoError(t, txn.Add(1, []uint32{7, 8, 9}), "add failed")
+	require.NoError(t, txn.Close(), "close failed")
+
+	hits, err := db.Search([]uint32{9})
+	require.NoError(t, err, "search failed")
+	require.Empty(t, hits, "hits should be empty because the transaction was not committed")
+}
+
+func TestDB_Transaction_DeleteUncommitted(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	txn := db.Transaction()
+	require.NoError(t, txn.Add(1, []uint32{7, 8, 9}), "add failed")
+	require.NoError(t, txn.Delete(1), "delete failed")
+	require.NoError(t, txn.Commit(), "commit failed")
+	require.NoError(t, txn.Close(), "close failed")
+
+	hits, err := db.Search([]uint32{9})
+	require.NoError(t, err, "search failed")
+	require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
+}
+
+func TestDB_Delete(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
+	require.NoError(t, db.Delete(1), "delete failed")
+
+	hits, err := db.Search([]uint32{9})
+	require.NoError(t, err, "search failed")
+	require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
+}

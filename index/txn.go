@@ -3,20 +3,26 @@ package index
 import (
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
-	"math"
 	"log"
+	"math"
 )
+
+type deletedDoc struct {
+	docID     uint32
+	segmentID SegmentID
+}
 
 type Transaction struct {
 	*Snapshot
-	fs        vfs.FileSystem
-	commitFn  func(m *Manifest) error
-	committed bool
-	counter   uint8
-	buffer    ItemBuffer
+	fs          vfs.FileSystem
+	commitFn    func(m *Manifest) error
+	committed   bool
+	counter     uint8
+	buffer      ItemBuffer
+	deletedDocs []deletedDoc
 }
 
-const MaxBufferedItems = 10 * 1024 * 1024
+const MaxBufferedItems = 1024 * 1024
 
 var (
 	ErrCommitted       = errors.New("transaction is already committed")
@@ -29,6 +35,7 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	}
 
 	txn.buffer.Add(docID, terms)
+	log.Printf("added doc %v to the transaction buffer", docID)
 
 	if txn.buffer.NumItems() > MaxBufferedItems {
 		err := txn.Flush()
@@ -48,10 +55,16 @@ func (txn *Transaction) Delete(docID uint32) error {
 	for _, segment := range txn.manifest.Segments {
 		if segment.docs.Contains(docID) {
 			log.Printf("found %v in segment %v", docID, segment.ID)
+			txn.deletedDocs = append(txn.deletedDocs, deletedDoc{docID: docID, segmentID: segment.ID})
+
 		}
 	}
 
-	return errors.New("not implmented")
+	if txn.buffer.Delete(docID) {
+		log.Printf("deleted doc %v from the transaction buffer", docID)
+	}
+
+	return nil
 }
 
 func (txn *Transaction) Update(docID uint32, terms []uint32) error {
@@ -105,6 +118,7 @@ func (txn *Transaction) Flush() error {
 	}
 
 	txn.manifest.AddSegment(segment)
+	log.Printf("flushed %v docs from the transaction buffer to segment %v", txn.buffer.NumDocs(), segment.ID)
 
 	txn.buffer.Reset()
 

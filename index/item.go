@@ -4,6 +4,7 @@ import (
 	"github.com/acoustid/go-acoustid/util"
 	"go4.org/sort"
 	"io"
+	"math"
 )
 
 // Items is one (term,docID) pair in the inverted index.
@@ -57,6 +58,45 @@ func (ib *ItemBuffer) Add(docID uint32, terms []uint32) {
 	for _, term := range terms {
 		ib.items = append(ib.items, Item{DocID: docID, Term: term})
 	}
+}
+
+func (ib *ItemBuffer) Delete(docID uint32) bool {
+	// TODO optimize
+	if docID < ib.minDocID || docID > ib.maxDocID {
+		return false
+	}
+
+	n := 0
+	for _, item := range ib.items {
+		if item.DocID != docID {
+			ib.items[n] = item
+			n++
+		}
+	}
+
+	if n == len(ib.items) {
+		return false
+	}
+
+	ib.items = ib.items[:n]
+	ib.numDocs--
+	if docID == ib.minDocID || docID == ib.maxDocID {
+		ib.minDocID = 0
+		ib.maxDocID = 0
+		if ib.numDocs > 0 {
+			ib.minDocID = math.MaxUint32
+			for _, item := range ib.items {
+				if item.DocID < ib.minDocID {
+					ib.minDocID = item.DocID
+				}
+				if item.DocID > ib.maxDocID {
+					ib.maxDocID = item.DocID
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 func (ib *ItemBuffer) Reader() ItemReader {
