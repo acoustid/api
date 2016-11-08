@@ -47,6 +47,18 @@
 			"revisionTime": "2016-09-23T17:06:11Z"
 		},
 		{
+			"checksumSHA1": "FygqfsRzjqsiYaLC+XSXrh1MUr8=",
+			"path": "go4.org/reflectutil",
+			"revision": "399a9d7bfe85437346a5ec4ef0450fc2f1084e61",
+			"revisionTime": "2016-09-23T17:06:11Z"
+		},
+		{
+			"checksumSHA1": "c+f3dM/ZyIosR1rl+yO5pI2DCV4=",
+			"path": "go4.org/sort",
+			"revision": "399a9d7bfe85437346a5ec4ef0450fc2f1084e61",
+			"revisionTime": "2016-09-23T17:06:11Z"
+		},
+		{
 			"checksumSHA1": "aVgPDgwY3/t4J/JOw9H3FVMHqh0=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "c200b10b5d5e122be351b67af224adc6128af5bf",
