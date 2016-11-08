@@ -3,10 +3,10 @@ package index
 import (
 	"encoding/json"
 	"github.com/acoustid/go-acoustid/util/vfs"
+	"github.com/pkg/errors"
 	"log"
 	"sync"
 	"sync/atomic"
-	"github.com/pkg/errors"
 )
 
 const ManifestFilename = "manifest.json"
@@ -23,11 +23,11 @@ type Manifest struct {
 
 func (m *Manifest) Clone() *Manifest {
 	return &Manifest{
-		ID:        m.ID,
-		NumDocs:   m.NumDocs,
+		ID:       m.ID,
+		NumDocs:  m.NumDocs,
 		NumItems: m.NumItems,
-		Checksum:  m.Checksum,
-		Segments:  append([]*Segment{}, m.Segments...),
+		Checksum: m.Checksum,
+		Segments: append([]*Segment{}, m.Segments...),
 	}
 }
 
@@ -52,12 +52,37 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 	m.Segments = segments
 }
 
+func (m *Manifest) Save(fs vfs.FileSystem, name string) error {
+	file, err := fs.CreateAtomicFile(name)
+	if err != nil {
+		return errors.Wrap(err, "create failed")
+	}
+	defer file.Close()
+
+	encoded, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return errors.Wrap(err, "JSON serialization failed")
+	}
+
+	_, err = file.Write(encoded)
+	if err != nil {
+		return errors.Wrap(err, "write failed")
+	}
+
+	err = file.Commit()
+	if err != nil {
+		return errors.Wrap(err, "commit failed")
+	}
+
+	return nil
+}
+
 type DB struct {
 	fs       vfs.FileSystem
 	mu       sync.Mutex
 	txid     uint32
 	manifest atomic.Value
-	closed bool
+	closed   bool
 }
 
 func Open(fs vfs.FileSystem, create bool) (*DB, error) {
@@ -96,8 +121,8 @@ func (db *DB) Close() {
 	db.closed = true
 }
 
-func (db *DB) Add(docid uint32, hashes []uint32) error {
-	return db.RunInTransaction(func (txn *Transaction) error { return txn.Add(docid, hashes) })
+func (db *DB) Add(docID uint32, hashes []uint32) error {
+	return db.RunInTransaction(func(txn *Transaction) error { return txn.Add(docID, hashes) })
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
@@ -118,7 +143,7 @@ func (db *DB) Transaction() *Transaction {
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
 // the transaction will be automatically committed.
-func (db *DB) RunInTransaction(fn func (txn *Transaction) error) error {
+func (db *DB) RunInTransaction(fn func(txn *Transaction) error) error {
 	txn := db.Transaction()
 	defer txn.Close()
 
@@ -148,22 +173,9 @@ func (db *DB) commit(manifest *Manifest) error {
 		return ErrAlreadyClosed
 	}
 
-	file, err := db.fs.CreateAtomicFile("manifest.json")
+	err := manifest.Save(db.fs, ManifestFilename)
 	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	err = encoder.Encode(manifest)
-	if err != nil {
-		return err
-	}
-
-	err = file.Commit()
-	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to save manifest")
 	}
 
 	db.manifest.Store(manifest)
