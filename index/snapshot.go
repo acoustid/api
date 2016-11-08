@@ -6,7 +6,6 @@ import (
 )
 
 type Snapshot struct {
-	db       *DB
 	manifest *Manifest
 }
 

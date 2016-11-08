@@ -108,27 +108,22 @@ func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 }
 
 func (db *DB) newSnapshot() *Snapshot {
-	return &Snapshot{
-		db:       db,
-		manifest: db.manifest.Load().(*Manifest),
-	}
+	manifest := db.manifest.Load().(*Manifest)
+	return &Snapshot{manifest: manifest}
 }
 
 func (db *DB) newTransaction() *Transaction {
 	manifest := db.manifest.Load().(*Manifest).Clone()
 	manifest.ID = atomic.AddUint32(&db.txid, 1)
-
 	log.Printf("started transaction %d", manifest.ID)
-
 	return &Transaction{
-		Snapshot: Snapshot{
-			db:       db,
-			manifest: manifest,
-		},
+		Snapshot: Snapshot{manifest: manifest},
+		fs: db.fs,
+		commitFn: db.commit,
 	}
 }
 
-func (db *DB) commit(txn *Transaction) error {
+func (db *DB) commit(manifest *Manifest) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -137,8 +132,6 @@ func (db *DB) commit(txn *Transaction) error {
 		return err
 	}
 	defer file.Close()
-
-	manifest := txn.manifest
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")

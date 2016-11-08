@@ -1,14 +1,17 @@
 package index
 
 import (
+	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"math"
 )
 
 type Transaction struct {
 	Snapshot
-	counter   uint8
+	fs        vfs.FileSystem
+	commitFn  func(m *Manifest) error
 	committed bool
+	counter   uint8
 	buffer    ItemBuffer
 }
 
@@ -78,7 +81,7 @@ func (txn *Transaction) createSegment(input ItemReader) (*Segment, error) {
 		return nil, ErrTooManySegments
 	}
 	txn.counter += 1
-	return CreateSegment(txn.db.fs, NewSegmentID(txn.manifest.ID, txn.counter), input)
+	return CreateSegment(txn.fs, NewSegmentID(txn.manifest.ID, txn.counter), input)
 }
 
 func (txn *Transaction) Commit() error {
@@ -91,7 +94,7 @@ func (txn *Transaction) Commit() error {
 		return errors.Wrap(err, "flush failed")
 	}
 
-	err = txn.db.commit(txn)
+	err = txn.commitFn(txn.manifest)
 	if err != nil {
 		return errors.Wrap(err, "commit failed")
 	}
