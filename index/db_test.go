@@ -1,10 +1,10 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/util/vfs"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/stretchr/testify/require"
-	"testing"
 	"math/rand"
+	"testing"
 )
 
 func TestDB(t *testing.T) {
@@ -76,7 +76,7 @@ func TestDB_Delete(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
-	func () {
+	func() {
 		db, err := Open(fs, true)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
@@ -89,7 +89,7 @@ func TestDB_Delete(t *testing.T) {
 		require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
 	}()
 
-	func () {
+	func() {
 		db, err := Open(fs, false)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()
@@ -104,7 +104,7 @@ func TestDB_Update(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
-	func () {
+	func() {
 		db, err := Open(fs, true)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
@@ -121,7 +121,7 @@ func TestDB_Update(t *testing.T) {
 		require.Equal(t, map[uint32]int{1: 1}, hits, "we should find the updated doc")
 	}()
 
-	func () {
+	func() {
 		db, err := Open(fs, false)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()
@@ -140,7 +140,7 @@ func TestDB_DeleteAll(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
-	func () {
+	func() {
 		db, err := Open(fs, true)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
@@ -154,7 +154,7 @@ func TestDB_DeleteAll(t *testing.T) {
 		require.Empty(t, hits, "hits should be empty, we should not find anything")
 	}()
 
-	func () {
+	func() {
 		db, err := Open(fs, false)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()

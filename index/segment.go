@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/util/bitset"
 	"github.com/acoustid/go-acoustid/util/intcompress"
-	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -62,13 +62,13 @@ func (s *Segment) Size() int {
 
 func (s *Segment) Clone() *Segment {
 	return &Segment{
-		ID:             s.ID,
-		Meta:           s.Meta,
-		blockIndex:     s.blockIndex,
-		reader:         s.reader,
-		docs:           s.docs,
-		deletedDocs:    s.deletedDocs,
-		dirty:          false,
+		ID:          s.ID,
+		Meta:        s.Meta,
+		blockIndex:  s.blockIndex,
+		reader:      s.reader,
+		docs:        s.docs,
+		deletedDocs: s.deletedDocs,
+		dirty:       false,
 	}
 }
 

@@ -1,11 +1,11 @@
 package vfs
 
 import (
-	"io"
 	"github.com/pkg/errors"
+	"io"
 )
 
-func WriteFile(fs FileSystem, name string, write func (w io.Writer) error) error {
+func WriteFile(fs FileSystem, name string, write func(w io.Writer) error) error {
 	file, err := fs.CreateAtomicFile(name)
 	if err != nil {
 		return errors.Wrap(err, "create failed")

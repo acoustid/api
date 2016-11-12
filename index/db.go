@@ -1,7 +1,7 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/util/vfs"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/pkg/errors"
 	"log"
 	"sync"

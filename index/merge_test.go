@@ -1,8 +1,8 @@
 package index
 
 import (
-	"testing"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestTieredMergePolicy_FindMerges_MergeEqual(t *testing.T) {

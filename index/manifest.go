@@ -2,19 +2,19 @@ package index
 
 import (
 	"encoding/json"
-	"io"
-	"github.com/acoustid/go-acoustid/util/vfs"
+	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/pkg/errors"
+	"io"
 )
 
 const ManifestFilename = "manifest.json"
 
 type Manifest struct {
-	ID             uint32     `json:"id"`
-	NumDocs        int        `json:"ndocs"`
-	NumItems       int        `json:"nitems"`
-	Checksum       uint32     `json:"checksum"`
-	Segments       []*Segment `json:"segments"`
+	ID       uint32     `json:"id"`
+	NumDocs  int        `json:"ndocs"`
+	NumItems int        `json:"nitems"`
+	Checksum uint32     `json:"checksum"`
+	Segments []*Segment `json:"segments"`
 }
 
 // Resets removes all segments from the manifest.

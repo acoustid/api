@@ -188,4 +188,3 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 
 	return
 }
-
