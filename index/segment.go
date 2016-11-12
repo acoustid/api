@@ -252,7 +252,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	s.Meta.MinDocID = it.MinDocID()
 	s.Meta.MaxDocID = it.MaxDocID()
 
-	s.docs = bitset.New(s.Meta.MinDocID, s.Meta.MinDocID)
+	s.docs = bitset.New(s.Meta.MinDocID, s.Meta.MaxDocID)
 
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)

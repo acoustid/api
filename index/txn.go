@@ -97,6 +97,22 @@ func (txn *Transaction) DeleteAll() error {
 	return nil
 }
 
+func (txn *Transaction) Import(stream ItemReader) error {
+	if txn.Committed() {
+		return ErrCommitted
+	}
+
+	segment, err := txn.db.createSegment(stream)
+	if err != nil {
+		return errors.Wrap(err, "failed to create a new segment")
+	}
+
+	txn.manifest.AddSegment(segment)
+
+	log.Printf("imported %v docs to segment %v", segment.Meta.NumDocs, segment.ID)
+	return nil
+}
+
 func (txn *Transaction) Flush() error {
 	if txn.Committed() {
 		return ErrCommitted

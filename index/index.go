@@ -28,6 +28,10 @@ type Writer interface {
 
 	// DeleteAll deletes all documents from the index.
 	DeleteAll() error
+
+	// Import inserts a stream of sorted (docID,term) pairs into the index.
+	Import(stream ItemReader) error
+
 }
 
 type BulkWriter interface {

@@ -164,3 +164,21 @@ func TestDB_DeleteAll(t *testing.T) {
 		require.Empty(t, hits, "hits should be empty, we should not find anything")
 	}()
 }
+
+func TestDB_Import(t *testing.T) {
+	fs := vfs.CreateMemDir()
+	defer fs.Close()
+
+	db, err := Open(fs, true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	var buf ItemBuffer
+	buf.Add(1, []uint32{7, 8, 9})
+	buf.Add(2, []uint32{3, 4, 5})
+	require.NoError(t, db.Import(buf.Reader()), "import failed")
+
+	hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
+	require.NoError(t, err, "search failed")
+	require.Equal(t, map[uint32]int{1: 3, 2: 3}, hits, "we should find both imported docs")
+}
