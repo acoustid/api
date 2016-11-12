@@ -56,7 +56,6 @@ func (txn *Transaction) Delete(docID uint32) error {
 		if segment.docs.Contains(docID) {
 			log.Printf("found %v in segment %v", docID, segment.ID)
 			txn.deletedDocs = append(txn.deletedDocs, deletedDoc{docID: docID, segmentID: segment.ID})
-
 		}
 	}
 

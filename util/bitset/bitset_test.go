@@ -31,4 +31,5 @@ func TestFixedBitSet(t *testing.T) {
 	assert.False(t, bs.Contains(1))
 	assert.False(t, bs.Contains(2))
 	assert.True(t, bs.Contains(64))
+
 }
