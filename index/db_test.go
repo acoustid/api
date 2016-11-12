@@ -73,14 +73,29 @@ func TestDB_Transaction_DeleteUncommitted(t *testing.T) {
 }
 
 func TestDB_Delete(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
-	require.NoError(t, err, "failed to create a new db")
-	defer db.Close()
+	fs := vfs.CreateMemDir()
+	defer fs.Close()
 
-	require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
-	require.NoError(t, db.Delete(1), "delete failed")
+	func () {
+		db, err := Open(fs, true)
+		require.NoError(t, err, "failed to create a new db")
+		defer db.Close()
 
-	hits, err := db.Search([]uint32{9})
-	require.NoError(t, err, "search failed")
-	require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
+		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
+		require.NoError(t, db.Delete(1), "delete failed")
+
+		hits, err := db.Search([]uint32{9})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
+	}()
+
+	func () {
+		db, err := Open(fs, false)
+		require.NoError(t, err, "failed to open db")
+		defer db.Close()
+
+		hits, err := db.Search([]uint32{9})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
+	}()
 }

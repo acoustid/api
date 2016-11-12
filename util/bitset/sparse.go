@@ -2,6 +2,7 @@ package bitset
 
 import (
 	"encoding/json"
+	"io"
 )
 
 type SparseBitSet struct {
@@ -55,12 +56,12 @@ func (s *SparseBitSet) Contains(x uint32) bool {
 	return block[j]&m != 0
 }
 
-func (s *SparseBitSet) Marshal() ([]byte, error) {
+func (s *SparseBitSet) WriteTo(w io.Writer) error {
 	// XXX binary encoding
-	return json.Marshal(s.blocks)
+	return json.NewEncoder(w).Encode(s.blocks)
 }
 
-func (s *SparseBitSet) Unmarshal(data []byte) error {
+func (s *SparseBitSet) ReadFrom(r io.Reader) error {
 	// XXX binary encoding
-	return json.Unmarshal(data, s.blocks)
+	return json.NewDecoder(r).Decode(&s.blocks)
 }

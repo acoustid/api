@@ -7,6 +7,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"io"
 )
 
 const ManifestFilename = "manifest.json"
@@ -56,29 +57,30 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 	m.Segments = segments
 }
 
-func (m *Manifest) Save(fs vfs.FileSystem, name string) error {
-	file, err := fs.CreateAtomicFile(name)
+func (m *Manifest) Load(fs vfs.FileSystem, create bool) error {
+	file, err := fs.OpenFile(ManifestFilename)
 	if err != nil {
-		return errors.Wrap(err, "create failed")
+		if vfs.IsNotExist(err) && create {
+			m.ID = 1
+			return m.Save(fs)
+		}
+		return errors.Wrap(err, "open failed")
 	}
-	defer file.Close()
-
-	encoded, err := json.MarshalIndent(m, "", "  ")
+	err = json.NewDecoder(file).Decode(m)
 	if err != nil {
-		return errors.Wrap(err, "JSON serialization failed")
+		return errors.Wrap(err, "decode failed")
 	}
-
-	_, err = file.Write(encoded)
-	if err != nil {
-		return errors.Wrap(err, "write failed")
-	}
-
-	err = file.Commit()
-	if err != nil {
-		return errors.Wrap(err, "commit failed")
-	}
-
 	return nil
+}
+
+func (m *Manifest) WriteTo(w io.Writer) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(m)
+}
+
+func (m *Manifest) Save(fs vfs.FileSystem) error {
+	return vfs.WriteFile(fs, ManifestFilename, m.WriteTo)
 }
 
 type DB struct {
@@ -91,31 +93,28 @@ type DB struct {
 
 func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 	var manifest Manifest
-	file, err := fs.OpenFile(ManifestFilename)
+	err := manifest.Load(fs, create)
 	if err != nil {
-		if vfs.IsNotExist(err) && create {
-			log.Printf("creating new database in %v", fs)
-		} else {
-			return nil, err
-		}
-	} else {
-		log.Printf("opening database %v", fs)
-		err = json.NewDecoder(file).Decode(&manifest)
-		if err != nil {
-			return nil, err
-		}
-		log.Printf("manifest=%v", manifest)
-		for i, segment := range manifest.Segments {
-			err = segment.Open(fs)
-			if err != nil {
-				return nil, err
-			}
-			log.Printf("segment[%v]=%v", i, segment)
-		}
+		return nil, errors.Wrap(err, "manifest load failed")
+
 	}
 
 	db := &DB{fs: fs, txid: manifest.ID}
 	db.manifest.Store(&manifest)
+
+	for _, segment := range manifest.Segments {
+		err = segment.Open(fs)
+		if err != nil {
+			return nil, err
+		}
+		if segment.ID > db.txid {
+			db.txid = segment.ID
+		}
+		if segment.UpdateID > db.txid {
+			db.txid = segment.UpdateID
+		}
+	}
+
 	return db, nil
 }
 
@@ -192,7 +191,7 @@ func (db *DB) commit(manifest *Manifest) error {
 		}
 	}
 
-	err := manifest.Save(db.fs, ManifestFilename)
+	err := manifest.Save(db.fs)
 	if err != nil {
 		return errors.Wrap(err, "failed to save manifest")
 	}

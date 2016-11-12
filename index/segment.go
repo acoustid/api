@@ -140,9 +140,16 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 		return errors.Wrap(err, "docID set read failed")
 	}
 
+	err = s.LoadUpdate(fs)
+	if err != nil {
+		file.Close()
+		return errors.Wrap(err, "update load failed")
+	}
+
 	s.blockIndex = blockIndex
 	s.docs = docs
 	s.reader = file
+
 	return nil
 }
 
@@ -432,32 +439,32 @@ func (s *Segment) SaveUpdate(fs vfs.FileSystem, updateID uint32) error {
 	if !s.dirty {
 		return nil
 	}
-
-	file, err := fs.CreateAtomicFile(s.updateFileName(updateID))
+	err := vfs.WriteFile(fs, s.updateFileName(updateID), s.deletedDocs.WriteTo)
 	if err != nil {
-		return errors.Wrap(err, "create failed")
+		return err
+	}
+	s.UpdateID = updateID
+	s.dirty = false
+	return nil
+}
+
+func (s *Segment) LoadUpdate(fs vfs.FileSystem) error {
+	if s.UpdateID == 0 {
+		return nil
+	}
+
+	file, err := fs.OpenFile(s.updateFileName(s.UpdateID))
+	if err != nil {
+		return errors.Wrap(err, "open failed")
 	}
 	defer file.Close()
 
-	data, err := s.deletedDocs.Marshal()
+	s.deletedDocs = bitset.NewSparseBitSet()
+	err = s.deletedDocs.ReadFrom(file)
 	if err != nil {
-		return errors.Wrap(err, "serialization failed")
+		return errors.Wrap(err, "read failed")
 	}
 
-	_, err = file.Write(data)
-	if err != nil {
-		return errors.Wrap(err, "write failed")
-	}
-
-	err = file.Commit()
-	if err != nil {
-		return errors.Wrap(err, "commit failed")
-	}
-
-	s.UpdateID = updateID
-	s.dirty = false
-
-	log.Println("saved segment update", s.ID, s.UpdateID)
-
+	log.Printf("loaded update %v for segment %v with %v deleted docs", s.UpdateID, s.ID, s.Meta.NumDeletedDocs)
 	return nil
 }
