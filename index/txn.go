@@ -1,32 +1,22 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"log"
-	"math"
 )
-
-type deletedDoc struct {
-	docID     uint32
-	segmentID SegmentID
-}
 
 type Transaction struct {
 	*Snapshot
-	fs          vfs.FileSystem
-	commitFn    func(m *Manifest) error
-	committed   bool
-	counter     uint8
-	buffer      ItemBuffer
-	deletedDocs []deletedDoc
+	db        *DB
+	committed bool
+	counter   uint8
+	buffer    ItemBuffer
 }
 
 const MaxBufferedItems = 1024 * 1024
 
 var (
-	ErrCommitted       = errors.New("transaction is already committed")
-	ErrTooManySegments = errors.New("too many segments")
+	ErrCommitted = errors.New("transaction is already committed")
 )
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
@@ -53,9 +43,8 @@ func (txn *Transaction) Delete(docID uint32) error {
 	}
 
 	for _, segment := range txn.manifest.Segments {
-		if segment.docs.Contains(docID) {
+		if segment.Delete(docID) {
 			log.Printf("found %v in segment %v", docID, segment.ID)
-			txn.deletedDocs = append(txn.deletedDocs, deletedDoc{docID: docID, segmentID: segment.ID})
 		}
 	}
 
@@ -111,7 +100,7 @@ func (txn *Transaction) Flush() error {
 		return nil
 	}
 
-	segment, err := txn.createSegment(txn.buffer.Reader())
+	segment, err := txn.db.createSegment(txn.buffer.Reader())
 	if err != nil {
 		return errors.Wrap(err, "failed to create a new segment")
 	}
@@ -124,14 +113,6 @@ func (txn *Transaction) Flush() error {
 	return nil
 }
 
-func (txn *Transaction) createSegment(input ItemReader) (*Segment, error) {
-	if txn.counter == math.MaxUint8 {
-		return nil, ErrTooManySegments
-	}
-	txn.counter += 1
-	return CreateSegment(txn.fs, NewSegmentID(txn.manifest.ID, txn.counter), input)
-}
-
 func (txn *Transaction) Commit() error {
 	if txn.committed {
 		return ErrCommitted
@@ -142,7 +123,7 @@ func (txn *Transaction) Commit() error {
 		return errors.Wrap(err, "flush failed")
 	}
 
-	err = txn.commitFn(txn.manifest)
+	err = txn.db.commit(txn.manifest)
 	if err != nil {
 		return errors.Wrap(err, "commit failed")
 	}

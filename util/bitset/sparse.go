@@ -12,6 +12,15 @@ func NewSparseBitSet() *SparseBitSet {
 	return &SparseBitSet{blocks: make(map[uint32][]uint64)}
 }
 
+func (s *SparseBitSet) Clone() *SparseBitSet {
+	var s2 SparseBitSet
+	for i, block := range s.blocks {
+		s2.blocks[i] = make([]uint64, len(block))
+		copy(s2.blocks[i], block)
+	}
+	return &s2
+}
+
 func (s *SparseBitSet) Add(x uint32) {
 	i := x / (128 * 8)
 	block, exists := s.blocks[i]

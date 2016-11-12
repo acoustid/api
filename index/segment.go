@@ -28,38 +28,30 @@ var (
 	ErrBlockNotFound      = errors.New("block not found")
 )
 
-type SegmentID uint64
-
-func NewSegmentID(txid uint32, counter uint8) SegmentID {
-	return SegmentID(uint64(txid)<<8 | uint64(counter))
-}
-
-func (id SegmentID) TXID() uint32   { return uint32(id >> 8) }
-func (id SegmentID) Counter() uint8 { return uint8(id & 0xff) }
-
-func (id SegmentID) String() string {
-	return fmt.Sprintf("%v:%v", id.TXID(), id.Counter())
-}
-
 type SegmentMeta struct {
-	Format    int    `json:"format"`
-	Checksum  uint32 `json:"checksum"`
-	BlockSize int    `json:"blocksize"`
-	NumBlocks int    `json:"nblocks"`
-	NumDocs   int    `json:"ndocs"`
-	NumItems  int    `json:"nitems"`
-	MinTerm   uint32 `json:"minterm"`
-	MaxTerm   uint32 `json:"maxterm"`
-	MinDocID  uint32 `json:"mindocid"`
-	MaxDocID  uint32 `json:"maxdocid"`
+	Format         int    `json:"format"`
+	Checksum       uint32 `json:"checksum"`
+	BlockSize      int    `json:"blocksize"`
+	NumBlocks      int    `json:"nblocks"`
+	NumDocs        int    `json:"ndocs"`
+	NumDeletedDocs int    `json:"ndeldocs,omitempty"`
+	NumItems       int    `json:"nitems"`
+	MinTerm        uint32 `json:"minterm"`
+	MaxTerm        uint32 `json:"maxterm"`
+	MinDocID       uint32 `json:"mindocid"`
+	MaxDocID       uint32 `json:"maxdocid"`
 }
 
 type Segment struct {
-	ID         SegmentID   `json:"id"`
-	Meta       SegmentMeta `json:"meta"`
-	blockIndex []uint32
-	docs       *bitset.FixedBitSet
-	reader     vfs.InputFile
+	ID             uint32      `json:"id"`
+	UpdateID       uint32      `json:"updateid,omitempty"`
+	Meta           SegmentMeta `json:"meta"`
+	blockIndex     []uint32
+	reader         vfs.InputFile
+	docs           *bitset.FixedBitSet
+	deletedDocs    *bitset.SparseBitSet
+	ownDeletedDocs bool
+	dirty          bool
 }
 
 // Size returns the estimated size of the segment file in bytes.  The actual file size might differ.
@@ -68,7 +60,19 @@ func (s *Segment) Size() int {
 	return s.Meta.NumBlocks * (4 + s.Meta.BlockSize)
 }
 
-func CreateSegment(fs vfs.FileSystem, id SegmentID, input ItemReader) (*Segment, error) {
+func (s *Segment) Clone() *Segment {
+	return &Segment{
+		ID:             s.ID,
+		Meta:           s.Meta,
+		blockIndex:     s.blockIndex,
+		reader:         s.reader,
+		docs:           s.docs,
+		deletedDocs:    s.deletedDocs,
+		dirty:          false,
+	}
+}
+
+func CreateSegment(fs vfs.FileSystem, id uint32, input ItemReader) (*Segment, error) {
 	s := &Segment{
 		ID: id,
 		Meta: SegmentMeta{
@@ -143,7 +147,11 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 }
 
 func (s *Segment) fileName() string {
-	return fmt.Sprintf("segment-%x.dat", uint64(s.ID))
+	return fmt.Sprintf("segment-%x.dat", s.ID)
+}
+
+func (s *Segment) updateFileName(updateID uint32) string {
+	return fmt.Sprintf("segment-%x-%x.del", s.ID, updateID)
 }
 
 // Remove deletes all files associated with the segment
@@ -338,7 +346,9 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 				q = query[qi]
 			}
 			if val.Term == q {
-				callback(val.DocID)
+				if s.deletedDocs == nil || !s.deletedDocs.Contains(val.DocID) {
+					callback(val.DocID)
+				}
 			}
 		}
 		bi++
@@ -391,4 +401,63 @@ func (s *Segment) ReadBlock(i int) ([]Item, error) {
 	}
 
 	return values, nil
+}
+
+func (s *Segment) Contains(docID uint32) bool {
+	if !s.docs.Contains(docID) {
+		return false
+	}
+	if s.deletedDocs != nil && s.deletedDocs.Contains(docID) {
+		return false
+	}
+	return true
+}
+
+func (s *Segment) Delete(docID uint32) bool {
+	if !s.Contains(docID) {
+		return false
+	}
+	if s.deletedDocs == nil {
+		s.deletedDocs = bitset.NewSparseBitSet()
+	} else if !s.dirty {
+		s.deletedDocs = s.deletedDocs.Clone()
+	}
+	s.deletedDocs.Add(docID)
+	s.dirty = true
+	s.Meta.NumDeletedDocs += 1
+	return true
+}
+
+func (s *Segment) SaveUpdate(fs vfs.FileSystem, updateID uint32) error {
+	if !s.dirty {
+		return nil
+	}
+
+	file, err := fs.CreateAtomicFile(s.updateFileName(updateID))
+	if err != nil {
+		return errors.Wrap(err, "create failed")
+	}
+	defer file.Close()
+
+	data, err := s.deletedDocs.Marshal()
+	if err != nil {
+		return errors.Wrap(err, "serialization failed")
+	}
+
+	_, err = file.Write(data)
+	if err != nil {
+		return errors.Wrap(err, "write failed")
+	}
+
+	err = file.Commit()
+	if err != nil {
+		return errors.Wrap(err, "commit failed")
+	}
+
+	s.UpdateID = updateID
+	s.dirty = false
+
+	log.Println("saved segment update", s.ID, s.UpdateID)
+
+	return nil
 }

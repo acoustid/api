@@ -14,21 +14,25 @@ const ManifestFilename = "manifest.json"
 var ErrAlreadyClosed = errors.New("already closed")
 
 type Manifest struct {
-	ID       uint32     `json:"id"`
-	NumDocs  int        `json:"ndocs"`
-	NumItems int        `json:"nitems"`
-	Checksum uint32     `json:"checksum"`
-	Segments []*Segment `json:"segments"`
+	ID             uint32     `json:"id"`
+	NumDocs        int        `json:"ndocs"`
+	NumItems       int        `json:"nitems"`
+	Checksum       uint32     `json:"checksum"`
+	Segments       []*Segment `json:"segments"`
 }
 
 func (m *Manifest) Clone() *Manifest {
-	return &Manifest{
+	m2 := &Manifest{
 		ID:       m.ID,
 		NumDocs:  m.NumDocs,
 		NumItems: m.NumItems,
 		Checksum: m.Checksum,
-		Segments: append([]*Segment{}, m.Segments...),
+		Segments: make([]*Segment, len(m.Segments)),
 	}
+	for i, s := range m.Segments {
+		m2.Segments[i] = s.Clone()
+	}
+	return m2
 }
 
 func (m *Manifest) AddSegment(s *Segment) {
@@ -142,7 +146,7 @@ func (db *DB) Snapshot() Searcher {
 
 // Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
 func (db *DB) Transaction() BulkWriter {
-	return &Transaction{Snapshot: db.newSnapshot(true), fs: db.fs, commitFn: db.commit}
+	return &Transaction{Snapshot: db.newSnapshot(true), db: db}
 }
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
@@ -169,12 +173,23 @@ func (db *DB) newSnapshot(write bool) *Snapshot {
 	return &Snapshot{manifest: manifest}
 }
 
+func (db *DB) createSegment(input ItemReader) (*Segment, error) {
+	return CreateSegment(db.fs, atomic.AddUint32(&db.txid, 1), input)
+}
+
 func (db *DB) commit(manifest *Manifest) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if db.closed {
 		return ErrAlreadyClosed
+	}
+
+	for _, segment := range manifest.Segments {
+		err := segment.SaveUpdate(db.fs, manifest.ID)
+		if err != nil {
+			return errors.Wrap(err, "failed to save segment update")
+		}
 	}
 
 	err := manifest.Save(db.fs, ManifestFilename)

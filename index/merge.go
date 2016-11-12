@@ -173,7 +173,7 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 		}
 
 		// Filter out segments that we just selected to be merged.
-		removed := make(map[SegmentID]bool, len(merge.Segments))
+		removed := make(map[uint32]bool, len(merge.Segments))
 		for _, segment := range merge.Segments {
 			removed[segment.ID] = true
 		}
