@@ -1,5 +1,4 @@
-Requirements:
+# Experimental AcoustID Backend in Go
 
-    go get gopkg.in/mgo.v2
-    go get github.com/stretchr/testify/assert
-    go get github.com/cznic/sortutil
+The goal of this project is to reimplement all AcoustID backend components in Go and
+make them easier to use outside of AcoustID itself.
