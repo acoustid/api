@@ -26,8 +26,8 @@ type Writer interface {
 	// Delete deletes a document from the index.
 	Delete(docID uint32) error
 
-	// Truncate deletes all documents from the index.
-	Truncate() error
+	// DeleteAll deletes all documents from the index.
+	DeleteAll() error
 }
 
 type BulkWriter interface {

@@ -55,8 +55,8 @@ func (db *DB) Delete(docID uint32) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Delete(docID) })
 }
 
-func (db *DB) Truncate() error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Truncate() })
+func (db *DB) DeleteAll() error {
+	return db.RunInTransaction(func(txn BulkWriter) error { return txn.DeleteAll() })
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {

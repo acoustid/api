@@ -85,7 +85,7 @@ func (txn *Transaction) Update(docID uint32, terms []uint32) error {
 	return nil
 }
 
-func (txn *Transaction) Truncate() error {
+func (txn *Transaction) DeleteAll() error {
 	if txn.Committed() {
 		return ErrCommitted
 	}

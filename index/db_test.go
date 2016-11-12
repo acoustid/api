@@ -136,7 +136,7 @@ func TestDB_Update(t *testing.T) {
 	}()
 }
 
-func TestDB_Truncate(t *testing.T) {
+func TestDB_DeleteAll(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
@@ -147,7 +147,7 @@ func TestDB_Truncate(t *testing.T) {
 
 		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
 		require.NoError(t, db.Add(2, []uint32{3, 4, 5}), "add failed")
-		require.NoError(t, db.Truncate(), "truncate failed")
+		require.NoError(t, db.DeleteAll(), "truncate failed")
 
 		hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
 		require.NoError(t, err, "search failed")
