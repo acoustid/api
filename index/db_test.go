@@ -47,7 +47,8 @@ func TestDB_Transaction_NoCommit(t *testing.T) {
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
-	txn := db.Transaction()
+	txn, err := db.Transaction()
+	require.NoError(t, err)
 	require.NoError(t, txn.Add(1, []uint32{7, 8, 9}), "add failed")
 	require.NoError(t, txn.Close(), "close failed")
 
@@ -61,7 +62,8 @@ func TestDB_Transaction_DeleteUncommitted(t *testing.T) {
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
-	txn := db.Transaction()
+	txn, err := db.Transaction()
+	require.NoError(t, err)
 	require.NoError(t, txn.Add(1, []uint32{7, 8, 9}), "add failed")
 	require.NoError(t, txn.Delete(1), "delete failed")
 	require.NoError(t, txn.Commit(), "commit failed")

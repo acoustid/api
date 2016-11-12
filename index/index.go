@@ -31,7 +31,6 @@ type Writer interface {
 
 	// Import inserts a stream of sorted (docID,term) pairs into the index.
 	Import(stream ItemReader) error
-
 }
 
 type BulkWriter interface {

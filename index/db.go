@@ -3,6 +3,7 @@ package index
 import (
 	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/pkg/errors"
+	"io"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ var ErrAlreadyClosed = errors.New("already closed")
 type DB struct {
 	fs       vfs.FileSystem
 	mu       sync.Mutex
+	wlock    io.Closer
 	txid     uint32
 	manifest atomic.Value
 	closed   bool
@@ -40,6 +42,13 @@ func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 func (db *DB) Close() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if db.wlock != nil {
+		db.wlock.Close()
+		db.wlock = nil
+		log.Println("released write lock")
+	}
+
 	db.closed = true
 }
 
@@ -75,17 +84,39 @@ func (db *DB) Snapshot() Searcher {
 }
 
 // Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
-func (db *DB) Transaction() BulkWriter {
-	return &Transaction{Snapshot: db.newSnapshot(true), db: db}
+func (db *DB) Transaction() (BulkWriter, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return nil, ErrAlreadyClosed
+	}
+
+	if db.wlock == nil {
+		lock, err := db.fs.Lock("write.lock")
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to acquire write lock")
+		}
+		log.Println("acquired write lock")
+		db.wlock = lock
+	}
+
+	txn := &Transaction{Snapshot: db.newSnapshot(true), db: db}
+	log.Println("started new transaction")
+
+	return txn, nil
 }
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
 // the transaction will be automatically committed.
 func (db *DB) RunInTransaction(fn func(txn BulkWriter) error) error {
-	txn := db.Transaction()
+	txn, err := db.Transaction()
+	if err != nil {
+		return err
+	}
 	defer txn.Close()
 
-	err := fn(txn)
+	err = fn(txn)
 	if err != nil {
 		return err
 	}
