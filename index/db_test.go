@@ -99,3 +99,39 @@ func TestDB_Delete(t *testing.T) {
 		require.Empty(t, hits, "hits should be empty because the only added doc was deleted later")
 	}()
 }
+
+func TestDB_Update(t *testing.T) {
+	fs := vfs.CreateMemDir()
+	defer fs.Close()
+
+	func () {
+		db, err := Open(fs, true)
+		require.NoError(t, err, "failed to create a new db")
+		defer db.Close()
+
+		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
+		require.NoError(t, db.Update(1, []uint32{3, 4, 5}), "update failed")
+
+		hits, err := db.Search([]uint32{9})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty, we should not find anything")
+
+		hits, err = db.Search([]uint32{3})
+		require.NoError(t, err, "search failed")
+		require.Equal(t, map[uint32]int{1: 1}, hits, "we should find the updated doc")
+	}()
+
+	func () {
+		db, err := Open(fs, false)
+		require.NoError(t, err, "failed to open db")
+		defer db.Close()
+
+		hits, err := db.Search([]uint32{9})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty, we should not find anything")
+
+		hits, err = db.Search([]uint32{3})
+		require.NoError(t, err, "search failed")
+		require.Equal(t, map[uint32]int{1: 1}, hits, "we should find the updated doc")
+	}()
+}
