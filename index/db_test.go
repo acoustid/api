@@ -135,3 +135,32 @@ func TestDB_Update(t *testing.T) {
 		require.Equal(t, map[uint32]int{1: 1}, hits, "we should find the updated doc")
 	}()
 }
+
+func TestDB_Truncate(t *testing.T) {
+	fs := vfs.CreateMemDir()
+	defer fs.Close()
+
+	func () {
+		db, err := Open(fs, true)
+		require.NoError(t, err, "failed to create a new db")
+		defer db.Close()
+
+		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
+		require.NoError(t, db.Add(2, []uint32{3, 4, 5}), "add failed")
+		require.NoError(t, db.Truncate(), "truncate failed")
+
+		hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty, we should not find anything")
+	}()
+
+	func () {
+		db, err := Open(fs, false)
+		require.NoError(t, err, "failed to open db")
+		defer db.Close()
+
+		hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
+		require.NoError(t, err, "search failed")
+		require.Empty(t, hits, "hits should be empty, we should not find anything")
+	}()
+}
