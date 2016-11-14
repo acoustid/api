@@ -60,6 +60,12 @@ func (s *Segment) Size() int {
 	return s.Meta.NumBlocks * (4 + s.Meta.BlockSize)
 }
 
+func (s *Segment) NumDocs() int        { return s.Meta.NumDocs }
+func (s *Segment) NumDeletedDocs() int { return s.Meta.NumDeletedDocs }
+func (s *Segment) NumItems() int       { return s.Meta.NumItems }
+func (s *Segment) MinDocID() uint32    { return s.Meta.MinDocID }
+func (s *Segment) MaxDocID() uint32    { return s.Meta.MaxDocID }
+
 func (s *Segment) Clone() *Segment {
 	return &Segment{
 		ID:          s.ID,
@@ -467,4 +473,22 @@ func (s *Segment) LoadUpdate(fs vfs.FileSystem) error {
 
 	log.Printf("loaded update %v for segment %v with %v deleted docs", s.UpdateID, s.ID, s.Meta.NumDeletedDocs)
 	return nil
+}
+
+func (s *Segment) Reader() ItemReader {
+	return &segmentReader{Segment: s}
+}
+
+type segmentReader struct {
+	*Segment
+	block int
+}
+
+func (r *segmentReader) ReadBlock() ([]Item, error) {
+	i := r.block
+	if i >= r.Meta.NumBlocks {
+		return nil, io.EOF
+	}
+	r.block++
+	return r.Segment.ReadBlock(i)
 }
