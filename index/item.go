@@ -27,6 +27,20 @@ type ItemReader interface {
 	ReadBlock() (items []Item, err error)
 }
 
+func ReadAllItems(reader ItemReader) ([]Item, error) {
+	var items []Item
+	for {
+		block, err := reader.ReadBlock()
+		items = append(items, block...)
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return items, err
+		}
+	}
+}
+
 type ItemBuffer struct {
 	numDocs  int
 	minDocID uint32

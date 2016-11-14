@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDB(t *testing.T) {
@@ -183,4 +184,22 @@ func TestDB_Import(t *testing.T) {
 	hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
 	require.NoError(t, err, "search failed")
 	require.Equal(t, map[uint32]int{1: 3, 2: 3}, hits, "we should find both imported docs")
+}
+
+func TestDB_Reader(t *testing.T) {
+	fs := vfs.CreateMemDir()
+	defer fs.Close()
+
+	db, err := Open(fs, true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
+	require.NoError(t, db.Add(2, []uint32{3, 4, 5}), "add failed")
+
+	items, err := ReadAllItems(db.Reader())
+	if assert.NoError(t, err, "failed to read items") {
+		expected := []Item{{3, 2}, {4, 2}, {5, 2}, {7, 1}, {8, 1}, {9, 1}}
+		assert.Equal(t, expected, items, "read items do not match")
+	}
 }

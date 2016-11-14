@@ -168,3 +168,12 @@ func (db *DB) commit(manifest *Manifest) error {
 
 	return nil
 }
+
+func (db *DB) Reader() ItemReader {
+	var readers []ItemReader
+	manifest := db.manifest.Load().(*Manifest)
+	for _, segment := range manifest.Segments {
+		readers = append(readers, segment.Reader())
+	}
+	return MergeItemReaders(readers...)
+}
