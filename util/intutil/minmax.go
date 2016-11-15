@@ -1,7 +1,7 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package util
+package intutil
 
 func MinUint32(a, b uint32) uint32 {
 	if a <= b {

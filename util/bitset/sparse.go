@@ -6,7 +6,7 @@ package bitset
 import (
 	"encoding/json"
 	"io"
-	"github.com/acoustid/go-acoustid/util"
+	"github.com/acoustid/go-acoustid/util/intutil"
 )
 
 type SparseBitSet struct {
@@ -68,7 +68,7 @@ func (s *SparseBitSet) Contains(x uint32) bool {
 func (s *SparseBitSet) Len() int {
 	var n int
 	for _, block := range s.blocks {
-		n += util.PopCount64Slice(block)
+		n += intutil.PopCount64Slice(block)
 	}
 	return n
 }

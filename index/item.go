@@ -4,10 +4,10 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/util"
 	"go4.org/sort"
 	"io"
 	"math"
+	"github.com/acoustid/go-acoustid/util/intutil"
 )
 
 // Items is one (term,docID) pair in the inverted index.
@@ -182,8 +182,8 @@ func (r *multiItemReader) init() {
 	r.buf = make([]Item, 1024)
 	r.numDocs = r.reader1.NumDocs() + r.reader2.NumDocs()
 	r.numItems = r.reader1.NumItems() + r.reader2.NumItems()
-	r.minDocID = util.MinUint32(r.reader1.MinDocID(), r.reader2.MinDocID())
-	r.maxDocID = util.MaxUint32(r.reader1.MinDocID(), r.reader2.MaxDocID())
+	r.minDocID = intutil.MinUint32(r.reader1.MinDocID(), r.reader2.MinDocID())
+	r.maxDocID = intutil.MaxUint32(r.reader1.MinDocID(), r.reader2.MaxDocID())
 }
 
 func (r *multiItemReader) NumDocs() int     { return r.numDocs }
