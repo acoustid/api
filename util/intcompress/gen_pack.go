@@ -130,8 +130,7 @@ func genPackIntArray(bits int) string {
 	dblock := sblock * 8 / bits
 	var lines []string
 	lines = append(lines, fmt.Sprintf("// PackUint%dSlice converts an uint8 slice into a bit-packed uint%d slice.", bits, bits))
-	lines = append(lines, fmt.Sprintf("func PackUint%dSlice(src []uint8) []byte {", bits))
-	lines = append(lines, fmt.Sprintf("\tdst := make([]byte, (len(src)*%d+7)/8)", bits))
+	lines = append(lines, fmt.Sprintf("func PackUint%dSlice(dst[]byte, src []uint8) int {", bits))
 	lines = append(lines, fmt.Sprintf("\tn := 0"))
 	if dblock == 1 {
 		lines = append(lines, fmt.Sprintf("\tfor _, val := range src {"))
@@ -150,7 +149,7 @@ func genPackIntArray(bits int) string {
 		}
 		lines = append(lines, "\t}")
 	}
-	lines = append(lines, "\treturn dst", "}")
+	lines = append(lines, "\treturn n", "}")
 	return strings.Join(lines, "\n")
 }
 

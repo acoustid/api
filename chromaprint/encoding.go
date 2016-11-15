@@ -6,9 +6,8 @@ package chromaprint
 import (
 	"encoding/base64"
 	"encoding/binary"
-
-	"github.com/pkg/errors"
 	"github.com/acoustid/go-acoustid/util/intcompress"
+	"github.com/pkg/errors"
 )
 
 // Fingerprint contains raw fingerprint data.
@@ -129,7 +128,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 				hi++
 			} else {
 				lastBit += bit
-				hashes[hi] |= 1 << (lastBit-1)
+				hashes[hi] |= 1 << (lastBit - 1)
 			}
 		}
 		fp.Version = version
@@ -137,4 +136,47 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	}
 
 	return nil
+}
+
+func CompressFingerprint(fp Fingerprint) []byte {
+	bits := make([]uint8, 0, len(fp.Hashes)*32)
+	var lastBit uint8
+	var lastValue uint32
+	for _, h := range fp.Hashes {
+		value := h ^ lastValue
+		for i := uint8(0); i < 32; i++ {
+			if value&(1<<i) != 0 {
+				bit := i + 1
+				bits = append(bits, bit-lastBit)
+				lastBit = bit
+			}
+		}
+		bits = append(bits, 0)
+		lastBit = 0
+		lastValue = h
+	}
+
+	normalBits := bits[:]
+	exceptionBits := bits[len(bits):]
+	for i, b := range normalBits {
+		if b >= 7 {
+			exceptionBits = append(exceptionBits, normalBits[i]-7)
+			normalBits[i] = 7
+		}
+	}
+
+	normalBitsSize := (len(normalBits)*3 + 7) / 8
+	exceptionBitsSize := (len(exceptionBits)*5 + 7) / 8
+	size := 4 + normalBitsSize + exceptionBitsSize
+	data := make([]byte, size)
+
+	data[0] = byte(fp.Version & 255)
+	data[1] = byte((len(fp.Hashes) & 0xFF0000) >> 16)
+	data[2] = byte((len(fp.Hashes) & 0xFF00) >> 8)
+	data[3] = byte((len(fp.Hashes) & 0xFF) >> 0)
+
+	intcompress.PackUint3Slice(data[4:], normalBits)
+	intcompress.PackUint5Slice(data[4+normalBitsSize:], exceptionBits)
+
+	return data
 }

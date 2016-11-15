@@ -16,7 +16,7 @@ var (
 	TestFingerprintHashes = []uint32{0xdcfc2563, 0xdcbc2421, 0xddbc3420, 0xdd9c1530, 0xdf9c6d40, 0x4f4ce540, 0x4f0ea5c0, 0x4f0e94c1, 0x4706c4c1, 0x4716c4d3, 0x473744f2, 0x473f6472, 0x457f7572, 0x457f1563, 0x44fd2763, 0x44fd2713, 0x4cfd7753, 0x4cfd5f71, 0x45bdff71}
 )
 
-func TestDecodeFingerprintString_Empty(t *testing.T) {
+func TestDecodeFingerprintString(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		_, err := DecodeFingerprintString("")
 		assert.Error(t, err, "decoding an empty string should fail")
@@ -73,6 +73,8 @@ func TestParseFingerprint(t *testing.T) {
 					assert.Equal(t, c.fp.Version, fp.Version, "decoded fingerprint version does not match")
 					assert.Equal(t, c.fp.Hashes, fp.Hashes, "decoded fingerprint hashes do not match")
 				}
+				d := CompressFingerprint(c.fp)
+				assert.Equal(t, c.in, d)
 			} else {
 				assert.Error(t, err, "should not successfully decode invalid fingerprint data")
 			}
