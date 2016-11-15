@@ -7,6 +7,7 @@ import (
 	"flag"
 	"github.com/acoustid/go-acoustid/index"
 	"github.com/acoustid/go-acoustid/index/vfs"
+	"github.com/acoustid/go-acoustid/index/server"
 	"log"
 	"net"
 	"strconv"
@@ -44,7 +45,7 @@ func main() {
 	addr := net.JoinHostPort(*hostOpt, strconv.Itoa(*portOpt))
 	log.Printf("Listening on %v", addr)
 
-	err = index.ListenAndServe(addr, idx)
+	err = server.ListenAndServe(addr, idx)
 	if err != nil {
 		log.Fatalf("Failed to start the server: %v", err)
 	}

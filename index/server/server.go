@@ -1,7 +1,7 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package index
+package server
 
 import (
 	"encoding/json"
@@ -9,10 +9,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"github.com/acoustid/go-acoustid/index"
 )
 
 type context struct {
-	idx *DB
+	idx *index.DB
 }
 
 type indexHandler struct{ context }
@@ -125,7 +126,7 @@ func writeErrorResponse(w http.ResponseWriter, status int, message string) {
 	writeResponse(w, status, response)
 }
 
-func ListenAndServe(addr string, idx *DB) error {
+func ListenAndServe(addr string, idx *index.DB) error {
 	context := context{idx: idx}
 	mux := http.NewServeMux()
 	mux.Handle("/index", &indexHandler{context: context})
