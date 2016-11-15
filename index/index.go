@@ -1,7 +1,10 @@
+// Copyright (C) 2016  Lukas Lalinsky
+// Distributed under the MIT license, see the LICENSE file for details.
+
 // Package index provides a persistent inverted index structure for searching in 32-bit integers.
 //
 // The underlying structure is essentially a uint32->uint32 (term->docID) multimap.
-//
+
 package index
 
 import "io"

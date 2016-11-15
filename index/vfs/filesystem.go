@@ -1,3 +1,6 @@
+// Copyright (C) 2016  Lukas Lalinsky
+// Distributed under the MIT license, see the LICENSE file for details.
+
 // Package vfs is an abstraction of various filesystem operations.
 package vfs
 
