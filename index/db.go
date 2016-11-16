@@ -75,6 +75,10 @@ func (db *DB) Import(stream ItemReader) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Import(stream) })
 }
 
+func (db *DB) Compact() error {
+	return db.RunInTransaction(func(txn BulkWriter) error { return txn.(*Transaction).compact() })
+}
+
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 	snapshot := db.newSnapshot(false)
 	defer snapshot.Close()
@@ -179,4 +183,9 @@ func (db *DB) Reader() ItemReader {
 		readers = append(readers, segment.Reader())
 	}
 	return MergeItemReaders(readers...)
+}
+
+func (db *DB) NumSegments() int {
+	manifest := db.manifest.Load().(*Manifest)
+	return len(manifest.Segments)
 }

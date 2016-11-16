@@ -206,3 +206,15 @@ func TestDB_Reader(t *testing.T) {
 		assert.Equal(t, expected, items, "read items do not match")
 	}
 }
+
+func TestDB_Compact(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err, "failed to create a new db")
+	defer db.Close()
+
+	for i := uint32(0); i < 10; i++ {
+		require.NoError(t, db.Add(i, []uint32{i}), "add failed")
+	}
+	require.NoError(t, db.Compact(), "compact failed")
+	require.Equal(t, 1, db.NumSegments(), "db should be compacted to one segment")
+}

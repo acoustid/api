@@ -183,7 +183,7 @@ func (r *multiItemReader) init() {
 	r.numDocs = r.reader1.NumDocs() + r.reader2.NumDocs()
 	r.numItems = r.reader1.NumItems() + r.reader2.NumItems()
 	r.minDocID = intutil.MinUint32(r.reader1.MinDocID(), r.reader2.MinDocID())
-	r.maxDocID = intutil.MaxUint32(r.reader1.MinDocID(), r.reader2.MaxDocID())
+	r.maxDocID = intutil.MaxUint32(r.reader1.MaxDocID(), r.reader2.MaxDocID())
 }
 
 func (r *multiItemReader) NumDocs() int     { return r.numDocs }

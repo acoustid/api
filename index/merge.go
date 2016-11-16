@@ -36,7 +36,7 @@ func (m Merge) String() string {
 
 // MergePolicy determines a sequence of merge operations.
 type MergePolicy interface {
-	FindMerges(segments []*Segment) (merges []Merge)
+	FindMerges(segments []*Segment, maxSize int) (merges []Merge)
 }
 
 // TieredMergePolicy is an adaptation of the algorithm from Lucene's TieredMergePolicy written by Michael McCandless.
@@ -108,6 +108,7 @@ func (mp *TieredMergePolicy) findBestMerge(segments []*Segment, maxSize int) (be
 			skew = float64(mp.floorSize(merge.Segments[0].Size())) / float64(mergeSizeFloored)
 		}
 		merge.Score = skew * math.Pow(float64(mergeSize), 0.05)
+		merge.Size = mergeSize
 
 		if mp.Verbose {
 			log.Printf("FindMerges: merge %s", merge)
@@ -136,7 +137,7 @@ func (mp *TieredMergePolicy) FindMerges(origSegments []*Segment, maxSize int) (m
 			} else if size < mp.FloorSegmentSize {
 				extra += " [floored]"
 			}
-			log.Printf("FindMerges: Segment: %s, Size: %d%s", segment.ID, segment.Size(), extra)
+			log.Printf("FindMerges: Segment: %d, Size: %d%s", segment.ID, segment.Size(), extra)
 		}
 		if segment.Size() <= maxSize/2 {
 			segments = append(segments, segment)

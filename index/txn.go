@@ -153,3 +153,30 @@ func (txn *Transaction) Commit() error {
 func (txn *Transaction) Committed() bool {
 	return txn.manifest.ID != 0
 }
+
+func (txn *Transaction) compact() error {
+	err := txn.Flush()
+	if err != nil {
+		return errors.Wrap(err, "flush failed")
+	}
+
+	mp := NewTieredMergePolicy()
+	merges := mp.FindMerges(txn.manifest.Segments, 0)
+
+	for _, merge := range merges {
+		var readers []ItemReader
+		for _, segment := range merge.Segments {
+			readers = append(readers, segment.Reader())
+		}
+		segment, err := txn.db.createSegment(MergeItemReaders(readers...))
+		if err != nil {
+			return errors.Wrap(err, "segment merge failed")
+		}
+		txn.manifest.AddSegment(segment)
+		for _, segment := range merge.Segments {
+			txn.manifest.RemoveSegment(segment)
+		}
+	}
+
+	return nil
+}
