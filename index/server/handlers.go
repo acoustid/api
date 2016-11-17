@@ -74,7 +74,7 @@ func (h *UpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.db.Update(uint32(docID), input.Terms)
+	err = h.db.Add(uint32(docID), input.Terms)
 	if err != nil {
 		log.Printf("update failed: %v", err)
 		writeErrorResponse(w, 500, "internal error")

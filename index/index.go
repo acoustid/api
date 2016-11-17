@@ -22,10 +22,6 @@ type Writer interface {
 	// Returns a non-nil error if there was a problem and the document was not inserted.
 	Add(docID uint32, terms []uint32) error
 
-	// Update replaces the terms for a document in the index.
-	// It is an atomic equivalent of Delete(docID) followed by Add(docID, terms).
-	Update(docID uint32, terms []uint32) error
-
 	// Delete deletes a document from the index.
 	Delete(docID uint32) error
 

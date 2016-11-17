@@ -49,13 +49,26 @@ func (m *Manifest) Clone() *Manifest {
 	return m2
 }
 
-// AddSegment adds a new segment to the manifest and updates all internal stats.
-func (m *Manifest) AddSegment(s *Segment) {
+func (m *Manifest) addSegment(s *Segment, dedupe bool) {
 	m.NumDocs += s.Meta.NumDocs
-	m.NumDeletedDocs += s.Meta.NumDeletedDocs
 	m.NumItems += s.Meta.NumItems
 	m.Checksum += s.Meta.Checksum
+	if dedupe {
+		m.NumDeletedDocs = s.Meta.NumDeletedDocs
+		for _, s2 := range m.Segments {
+			s2.DeleteMulti(&s.docs)
+			m.NumDeletedDocs += s2.Meta.NumDeletedDocs
+		}
+	} else {
+		m.NumDeletedDocs += s.Meta.NumDeletedDocs
+	}
 	m.Segments[s.ID] = s
+}
+
+
+// AddSegment adds a new segment to the manifest and updates all internal stats.
+func (m *Manifest) AddSegment(s *Segment) {
+	m.addSegment(s, true)
 }
 
 // RemoveSegment removes a segment from the manifest and updates all internal stats.
@@ -123,15 +136,13 @@ func (m *Manifest) Rebase(base *Manifest) error {
 	for _, s := range m.Segments {
 		s2 := base.Segments[s.ID]
 		if s2 != nil && s2.deletedDocs != nil && s.UpdateID != s2.UpdateID {
-			if s.deletedDocs == nil {
-				s.deletedDocs = s2.deletedDocs.Clone()
+			if !s.dirty {
+				s.deletedDocs = s2.deletedDocs
 				s.Meta.NumDeletedDocs = s2.Meta.NumDeletedDocs
 				s.UpdateID = s2.UpdateID
-			} else {
-				s.deletedDocs.Union(s2.deletedDocs)
-				s.Meta.NumDeletedDocs = s.deletedDocs.Len()
-				s.dirty = true
+				continue
 			}
+			s.DeleteMulti(s2.deletedDocs)
 		}
 	}
 
@@ -148,23 +159,9 @@ func (m *Manifest) Rebase(base *Manifest) error {
 	for _, s := range base.Segments {
 		_, exists := m.Segments[s.ID]
 		if !exists {
-			s = s.Clone()
-			deletedDocs, numDeletedDocs := s.docs.Intersection(addedDocs)
-			if numDeletedDocs != 0 {
-				if s.deletedDocs == nil {
-					s.deletedDocs = deletedDocs
-					s.Meta.NumDeletedDocs = numDeletedDocs
-					s.dirty = true
-				} else {
-					s.deletedDocs.Union(deletedDocs)
-					numDeletedDocs = s.deletedDocs.Len()
-					if s.Meta.NumDeletedDocs != numDeletedDocs {
-						s.Meta.NumDeletedDocs = numDeletedDocs
-						s.dirty = true
-					}
-				}
-			}
-			m.AddSegment(s)
+			s2 := s.Clone()
+			s2.DeleteMulti(addedDocs)
+			m.addSegment(s2, false)
 		}
 	}
 

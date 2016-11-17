@@ -439,6 +439,24 @@ func (s *Segment) Delete(docID uint32) bool {
 	return true
 }
 
+func (s *Segment) DeleteMulti(docs *bitset.SparseBitSet) bool {
+	deletedDocs, numDeletedDocs := s.docs.Intersection(docs)
+	if numDeletedDocs == 0 {
+		return false
+	}
+	if s.deletedDocs != nil {
+		deletedDocs.Union(s.deletedDocs)
+		numDeletedDocs = deletedDocs.Len()
+		if s.Meta.NumDeletedDocs == numDeletedDocs {
+			return false
+		}
+	}
+	s.deletedDocs = deletedDocs
+	s.dirty = true
+	s.Meta.NumDeletedDocs = numDeletedDocs
+	return true
+}
+
 func (s *Segment) SaveUpdate(fs vfs.FileSystem, updateID uint32) error {
 	if !s.dirty {
 		return nil

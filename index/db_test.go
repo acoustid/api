@@ -106,7 +106,7 @@ func TestDB_Delete(t *testing.T) {
 	}()
 }
 
-func TestDB_Update(t *testing.T) {
+func TestDB_Add(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
@@ -116,7 +116,7 @@ func TestDB_Update(t *testing.T) {
 		defer db.Close()
 
 		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
-		require.NoError(t, db.Update(1, []uint32{3, 4, 5}), "update failed")
+		require.NoError(t, db.Add(1, []uint32{3, 4, 5}), "add failed")
 
 		hits, err := db.Search([]uint32{9})
 		require.NoError(t, err, "search failed")

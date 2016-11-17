@@ -10,13 +10,19 @@ import (
 
 type Transaction struct {
 	*Snapshot
-	db     *DB
-	buffer ItemBuffer
+	db          *DB
+	buffer      ItemBuffer
+	addedSegments map[uint32]*Segment
+	removedSegments []*Segment
 }
 
 const MaxBufferedItems = 1024 * 1024
 
 var ErrCommitted = errors.New("transaction is already committed")
+
+func (txn *Transaction) init() {
+	txn.addedSegments = make(map[uint32]*Segment)
+}
 
 func (txn *Transaction) NumDocs() int {
 	n := txn.buffer.NumDocs()
@@ -39,6 +45,10 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 		return ErrCommitted
 	}
 
+	if txn.buffer.Delete(docID) {
+		log.Printf("deleted doc %v from the transaction buffer", docID)
+	}
+
 	txn.buffer.Add(docID, terms)
 	log.Printf("added doc %v to the transaction buffer", docID)
 
@@ -57,32 +67,14 @@ func (txn *Transaction) Delete(docID uint32) error {
 		return ErrCommitted
 	}
 
-	for _, segment := range txn.manifest.Segments {
-		if segment.Delete(docID) {
-			log.Printf("deleted doc %v from segment %v", docID, segment.ID)
-		}
-	}
-
 	if txn.buffer.Delete(docID) {
 		log.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
-	return nil
-}
-
-func (txn *Transaction) Update(docID uint32, terms []uint32) error {
-	if txn.Committed() {
-		return ErrCommitted
-	}
-
-	err := txn.Delete(docID)
-	if err != nil {
-		return errors.Wrap(err, "delete failed")
-	}
-
-	err = txn.Add(docID, terms)
-	if err != nil {
-		return errors.Wrap(err, "add failed")
+	for _, segment := range txn.manifest.Segments {
+		if segment.Delete(docID) {
+			log.Printf("deleted doc %v from segment %v", docID, segment.ID)
+		}
 	}
 
 	return nil
@@ -176,6 +168,7 @@ func (txn *Transaction) compact() error {
 		for _, segment := range merge.Segments {
 			txn.manifest.RemoveSegment(segment)
 		}
+		break
 	}
 
 	return nil

@@ -59,10 +59,6 @@ func (db *DB) Add(docID uint32, hashes []uint32) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Add(docID, hashes) })
 }
 
-func (db *DB) Update(docID uint32, hashes []uint32) error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Update(docID, hashes) })
-}
-
 func (db *DB) Delete(docID uint32) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Delete(docID) })
 }
