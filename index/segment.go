@@ -51,9 +51,8 @@ type Segment struct {
 	Meta           SegmentMeta `json:"meta"`
 	blockIndex     []uint32
 	reader         vfs.InputFile
-	docs           *bitset.FixedBitSet
+	docs           bitset.SparseBitSet
 	deletedDocs    *bitset.SparseBitSet
-	ownDeletedDocs bool
 	dirty          bool
 }
 
@@ -129,21 +128,20 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 		return errors.Wrap(err, "open failed")
 	}
 
-	_, err = file.Seek(int64(s.Meta.BlockSize*s.Meta.NumBlocks), 0)
+	_, err = file.Seek(int64(s.Meta.BlockSize*s.Meta.NumBlocks), io.SeekStart)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "seek failed")
 	}
 
-	blockIndex := make([]uint32, s.Meta.NumDocs)
-	err = binary.Read(file, binary.LittleEndian, blockIndex)
+	s.blockIndex = make([]uint32, s.Meta.NumBlocks)
+	err = binary.Read(file, binary.LittleEndian, s.blockIndex)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "block index read failed")
 	}
 
-	docs := bitset.New(s.Meta.MinDocID, s.Meta.MinDocID)
-	err = docs.Read(file)
+	err = s.docs.Read(file)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "docID set read failed")
@@ -155,8 +153,6 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 		return errors.Wrap(err, "update load failed")
 	}
 
-	s.blockIndex = blockIndex
-	s.docs = docs
 	s.reader = file
 
 	return nil
@@ -261,7 +257,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	s.Meta.MinDocID = it.MinDocID()
 	s.Meta.MaxDocID = it.MaxDocID()
 
-	s.docs = bitset.New(s.Meta.MinDocID, s.Meta.MaxDocID)
+	s.docs.Init(1 + int(s.Meta.MaxDocID - s.Meta.MinDocID))
 
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)
@@ -434,7 +430,7 @@ func (s *Segment) Delete(docID uint32) bool {
 		return false
 	}
 	if s.deletedDocs == nil {
-		s.deletedDocs = bitset.NewSparseBitSet()
+		s.deletedDocs = bitset.NewSparseBitSet(1)
 	} else if !s.dirty {
 		s.deletedDocs = s.deletedDocs.Clone()
 	}
@@ -448,7 +444,7 @@ func (s *Segment) SaveUpdate(fs vfs.FileSystem, updateID uint32) error {
 	if !s.dirty {
 		return nil
 	}
-	err := vfs.WriteFile(fs, s.updateFileName(updateID), s.deletedDocs.WriteTo)
+	err := vfs.WriteFile(fs, s.updateFileName(updateID), s.deletedDocs.Write)
 	if err != nil {
 		return err
 	}
@@ -468,8 +464,8 @@ func (s *Segment) LoadUpdate(fs vfs.FileSystem) error {
 	}
 	defer file.Close()
 
-	s.deletedDocs = bitset.NewSparseBitSet()
-	err = s.deletedDocs.ReadFrom(file)
+	s.deletedDocs = bitset.NewSparseBitSet(0)
+	err = s.deletedDocs.Read(file)
 	if err != nil {
 		return errors.Wrap(err, "read failed")
 	}
