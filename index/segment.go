@@ -368,7 +368,6 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 			return nil
 		}
 	}
-	return nil
 }
 
 func (s *Segment) ReadBlock(i int) ([]Item, error) {

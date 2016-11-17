@@ -82,12 +82,10 @@ func (m *Manifest) Load(fs vfs.FileSystem, create bool) error {
 	return nil
 }
 
-func (m *Manifest) WriteTo(w io.Writer) error {
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(m)
-}
-
 func (m *Manifest) Save(fs vfs.FileSystem) error {
-	return vfs.WriteFile(fs, ManifestFilename, m.WriteTo)
+	return vfs.WriteFile(fs, ManifestFilename, func(w io.Writer) {
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(m)
+	})
 }
