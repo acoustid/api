@@ -102,6 +102,26 @@ func (s *SparseBitSet) Union(s2 *SparseBitSet) {
 	}
 }
 
+func (s *SparseBitSet) Intersection(s2 *SparseBitSet) (*SparseBitSet, int) {
+	s3 := NewSparseBitSet(0)
+	n := 0
+	for i, block2 := range s2.blocks {
+		block, exists := s.blocks[i]
+		if exists {
+			block3 := make([]uint64, blockWords)
+			for j := range block2 {
+				block3[j] = block[j] & block2[j]
+			}
+			nn := util.PopCount64Slice(block3)
+			if nn != 0 {
+				s3.blocks[i] = block3
+				n += nn
+			}
+		}
+	}
+	return s3, n
+}
+
 // Len computes the number of elements in the set. It executes in time proportional to the number of elements.
 func (s *SparseBitSet) Len() int {
 	var n int

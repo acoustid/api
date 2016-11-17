@@ -57,6 +57,28 @@ func TestManifest_Rebase(t *testing.T) {
 		require.Contains(t, m3.Segments, uint32(3))
 	})
 
+	t.Run("AddDuplicate", func(t *testing.T) {
+		m1 := &Manifest{}
+		m1.Reset()
+		m1.AddSegment(newSegment(1, 1, []uint32{1}))
+		m1.ID = 1
+
+		m2 := m1.Clone()
+		m2.AddSegment(newSegment(2, 2, []uint32{2}))
+		m2.ID = 2
+
+		m3 := m1.Clone()
+		m3.AddSegment(newSegment(3, 2, []uint32{3}))
+		err := m3.Rebase(m2)
+		require.NoError(t, err)
+		m3.UpdateStats()
+		require.Equal(t, 3, m3.NumDocs)
+		require.Equal(t, 1, m3.NumDeletedDocs)
+		require.Contains(t, m3.Segments, uint32(1))
+		require.Contains(t, m3.Segments, uint32(2))
+		require.Contains(t, m3.Segments, uint32(3))
+	})
+
 	t.Run("Delete", func(t *testing.T) {
 		m1 := &Manifest{}
 		m1.Reset()

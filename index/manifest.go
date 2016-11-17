@@ -8,6 +8,7 @@ import (
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
+	"github.com/acoustid/go-acoustid/util/bitset"
 )
 
 const ManifestFilename = "manifest.json"
@@ -134,11 +135,36 @@ func (m *Manifest) Rebase(base *Manifest) error {
 		}
 	}
 
-	// Copy segments that are only present in the base manifest.
+	// Build a set of docs added during the transaction.
+	addedDocs := bitset.NewSparseBitSet(0)
+	for _, s := range m.Segments {
+		_, exists := base.Segments[s.ID]
+		if !exists {
+			addedDocs.Union(&s.docs)
+		}
+	}
+
+	// Copy segments that are only present in the base manifest, but delete duplicate docs from them.
 	for _, s := range base.Segments {
 		_, exists := m.Segments[s.ID]
 		if !exists {
-			m.AddSegment(s.Clone())
+			s = s.Clone()
+			deletedDocs, numDeletedDocs := s.docs.Intersection(addedDocs)
+			if numDeletedDocs != 0 {
+				if s.deletedDocs == nil {
+					s.deletedDocs = deletedDocs
+					s.Meta.NumDeletedDocs = numDeletedDocs
+					s.dirty = true
+				} else {
+					s.deletedDocs.Union(deletedDocs)
+					numDeletedDocs = s.deletedDocs.Len()
+					if s.Meta.NumDeletedDocs != numDeletedDocs {
+						s.Meta.NumDeletedDocs = numDeletedDocs
+						s.dirty = true
+					}
+				}
+			}
+			m.AddSegment(s)
 		}
 	}
 
