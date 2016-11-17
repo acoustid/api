@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/util/bitset"
-	"github.com/acoustid/go-acoustid/util/intcompress"
+	"github.com/acoustid/go-acoustid/util"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -196,8 +196,8 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 
 	var lastTerm uint32
 	for i, it := range input {
-		n1 := intcompress.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
-		n2 := intcompress.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
+		n1 := util.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
+		n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
 		if BlockHeaderSize+ptr1+ptr2+n1+n2 >= s.Meta.BlockSize {
 			n = i
 			break
@@ -393,7 +393,7 @@ func (s *Segment) ReadBlock(i int) ([]Item, error) {
 
 	var term uint32
 	for i := range values {
-		delta, nn := intcompress.Uvarint32(data[ptr:])
+		delta, nn := util.Uvarint32(data[ptr:])
 		if nn <= 0 {
 			return nil, ErrInvalidBlockData
 		}
@@ -404,7 +404,7 @@ func (s *Segment) ReadBlock(i int) ([]Item, error) {
 
 	baseDocID := binary.LittleEndian.Uint32(data[4:])
 	for i := range values {
-		delta, nn := intcompress.Uvarint32(data[ptr:])
+		delta, nn := util.Uvarint32(data[ptr:])
 		if nn <= 0 {
 			return nil, ErrInvalidBlockData
 		}

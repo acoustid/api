@@ -1,4 +1,4 @@
-package intcompress
+package util
 
 const (
 	MaxVarintLen32 = 5

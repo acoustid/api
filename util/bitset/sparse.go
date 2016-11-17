@@ -5,7 +5,7 @@ package bitset
 
 import (
 	"io"
-	"github.com/acoustid/go-acoustid/util/intutil"
+	"github.com/acoustid/go-acoustid/util/bits"
 	"encoding/binary"
 )
 
@@ -90,7 +90,7 @@ func (s *SparseBitSet) Contains(x uint32) bool {
 func (s *SparseBitSet) Len() int {
 	var n int
 	for _, block := range s.blocks {
-		n += intutil.PopCount64Slice(block)
+		n += bits.PopCount64Slice(block)
 	}
 	return n
 }
@@ -98,7 +98,7 @@ func (s *SparseBitSet) Len() int {
 // Compact removes unused blocks from the set.
 func (s *SparseBitSet) Compact() {
 	for i, block := range s.blocks {
-		n := intutil.PopCount64Slice(block)
+		n := bits.PopCount64Slice(block)
 		if n == 0 {
 			delete(s.blocks, i)
 		}
