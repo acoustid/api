@@ -18,8 +18,7 @@ type Searcher interface {
 type Writer interface {
 	io.Closer
 
-	// Add inserts a document into the index.
-	// Returns a non-nil error if there was a problem and the document was not inserted.
+	// Add adds a document to the index. If the document already exists, it is updated.
 	Add(docID uint32, terms []uint32) error
 
 	// Delete deletes a document from the index.
