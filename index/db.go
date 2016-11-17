@@ -148,9 +148,7 @@ func (db *DB) commit(manifest *Manifest) error {
 	}
 
 	manifest.Rebase(db.manifest.Load().(*Manifest))
-
 	manifest.ID = atomic.AddUint32(&db.txid, 1)
-	manifest.UpdateStats()
 
 	for _, segment := range manifest.Segments {
 		err := segment.SaveUpdate(db.fs, manifest.ID)

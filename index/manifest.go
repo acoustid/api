@@ -165,6 +165,11 @@ func (m *Manifest) Rebase(base *Manifest) error {
 		}
 	}
 
+	m.NumDeletedDocs = 0
+	for _, s := range m.Segments {
+		m.NumDeletedDocs += s.NumDeletedDocs()
+	}
+
 	m.BaseID = base.ID
 
 	return nil
