@@ -4,11 +4,11 @@
 package bitset
 
 import (
-	"testing"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"bytes"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"math/rand"
+	"testing"
 )
 
 func TestSparseBitSet(t *testing.T) {

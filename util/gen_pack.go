@@ -82,7 +82,7 @@ func genUnpackIntArray(bits int) string {
 }
 
 func genPackIntArrayInner(bits int, dblock int, lines []string, pack bool) []string {
-	sblock := (dblock * bits + 7) / 8
+	sblock := (dblock*bits + 7) / 8
 
 	var vtype string
 	switch {
@@ -130,7 +130,7 @@ func genPackIntArray(bits int) string {
 	dblock := sblock * 8 / bits
 	var lines []string
 	lines = append(lines, fmt.Sprintf("// PackUint%dSlice converts an uint8 slice into a bit-packed uint%d slice.", bits, bits))
-	lines = append(lines, fmt.Sprintf("func PackUint%dSlice(dst[]byte, src []uint8) int {", bits))
+	lines = append(lines, fmt.Sprintf("func PackUint%dSlice(dst []byte, src []uint8) int {", bits))
 	lines = append(lines, fmt.Sprintf("\tn := 0"))
 	if dblock == 1 {
 		lines = append(lines, fmt.Sprintf("\tfor _, val := range src {"))
@@ -161,9 +161,9 @@ func main() {
 	defer file.Close()
 	sections := []string{
 		"// Copyright (C) 2016  Lukas Lalinsky\n" +
-		"// Distributed under the MIT license, see the LICENSE file for details.\n\n" +
-		"// THIS FILE WAS AUTOMATICALLY GENERATED, DO NOT EDIT\n\n" +
-		"package bits",
+			"// Distributed under the MIT license, see the LICENSE file for details.\n\n" +
+			"// THIS FILE WAS AUTOMATICALLY GENERATED, DO NOT EDIT\n\n" +
+			"package util",
 	}
 	for i := 1; i < 8; i++ {
 		sections = append(sections, genPackIntArray(i))

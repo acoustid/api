@@ -3,10 +3,10 @@
 
 // THIS FILE WAS AUTOMATICALLY GENERATED, DO NOT EDIT
 
-package bits
+package util
 
 // PackUint1Slice converts an uint8 slice into a bit-packed uint1 slice.
-func PackUint1Slice(dst[]byte, src []uint8) int {
+func PackUint1Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 8 {
 		val := uint8(src[0]) | uint8(src[1])<<1 | uint8(src[2])<<2 | uint8(src[3])<<3 | uint8(src[4])<<4 | uint8(src[5])<<5 | uint8(src[6])<<6 | uint8(src[7])<<7
@@ -67,7 +67,7 @@ func UnpackUint1Slice(src []byte) []uint8 {
 }
 
 // PackUint2Slice converts an uint8 slice into a bit-packed uint2 slice.
-func PackUint2Slice(dst[]byte, src []uint8) int {
+func PackUint2Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 4 {
 		val := uint8(src[0]) | uint8(src[1])<<2 | uint8(src[2])<<4 | uint8(src[3])<<6
@@ -108,7 +108,7 @@ func UnpackUint2Slice(src []byte) []uint8 {
 }
 
 // PackUint3Slice converts an uint8 slice into a bit-packed uint3 slice.
-func PackUint3Slice(dst[]byte, src []uint8) int {
+func PackUint3Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 8 {
 		val := uint32(src[0]) | uint32(src[1])<<3 | uint32(src[2])<<6 | uint32(src[3])<<9 | uint32(src[4])<<12 | uint32(src[5])<<15 | uint32(src[6])<<18 | uint32(src[7])<<21
@@ -203,7 +203,7 @@ func UnpackUint3Slice(src []byte) []uint8 {
 }
 
 // PackUint4Slice converts an uint8 slice into a bit-packed uint4 slice.
-func PackUint4Slice(dst[]byte, src []uint8) int {
+func PackUint4Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 2 {
 		val := uint8(src[0]) | uint8(src[1])<<4
@@ -234,7 +234,7 @@ func UnpackUint4Slice(src []byte) []uint8 {
 }
 
 // PackUint5Slice converts an uint8 slice into a bit-packed uint5 slice.
-func PackUint5Slice(dst[]byte, src []uint8) int {
+func PackUint5Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 8 {
 		val := uint64(src[0]) | uint64(src[1])<<5 | uint64(src[2])<<10 | uint64(src[3])<<15 | uint64(src[4])<<20 | uint64(src[5])<<25 | uint64(src[6])<<30 | uint64(src[7])<<35
@@ -354,7 +354,7 @@ func UnpackUint5Slice(src []byte) []uint8 {
 }
 
 // PackUint6Slice converts an uint8 slice into a bit-packed uint6 slice.
-func PackUint6Slice(dst[]byte, src []uint8) int {
+func PackUint6Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 4 {
 		val := uint32(src[0]) | uint32(src[1])<<6 | uint32(src[2])<<12 | uint32(src[3])<<18
@@ -418,7 +418,7 @@ func UnpackUint6Slice(src []byte) []uint8 {
 }
 
 // PackUint7Slice converts an uint8 slice into a bit-packed uint7 slice.
-func PackUint7Slice(dst[]byte, src []uint8) int {
+func PackUint7Slice(dst []byte, src []uint8) int {
 	n := 0
 	for len(src) >= 8 {
 		val := uint64(src[0]) | uint64(src[1])<<7 | uint64(src[2])<<14 | uint64(src[3])<<21 | uint64(src[4])<<28 | uint64(src[5])<<35 | uint64(src[6])<<42 | uint64(src[7])<<49

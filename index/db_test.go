@@ -4,11 +4,11 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/index/vfs"
+	"github.com/acoustid/go-acoustid/util/vfs"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDB(t *testing.T) {

@@ -4,15 +4,15 @@
 package bitset
 
 import (
-	"io"
-	"github.com/acoustid/go-acoustid/util/bits"
 	"encoding/binary"
+	"github.com/acoustid/go-acoustid/util"
+	"io"
 )
 
 const (
-	wordBits = 64
+	wordBits   = 64
 	blockWords = 32 // 256 bytes
-	blockBits = blockWords * wordBits
+	blockBits  = blockWords * wordBits
 )
 
 // SparseBitSet is an efficient set of uint32 elements.
@@ -90,7 +90,7 @@ func (s *SparseBitSet) Contains(x uint32) bool {
 func (s *SparseBitSet) Len() int {
 	var n int
 	for _, block := range s.blocks {
-		n += bits.PopCount64Slice(block)
+		n += util.PopCount64Slice(block)
 	}
 	return n
 }
@@ -98,7 +98,7 @@ func (s *SparseBitSet) Len() int {
 // Compact removes unused blocks from the set.
 func (s *SparseBitSet) Compact() {
 	for i, block := range s.blocks {
-		n := bits.PopCount64Slice(block)
+		n := util.PopCount64Slice(block)
 		if n == 0 {
 			delete(s.blocks, i)
 		}

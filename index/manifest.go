@@ -5,7 +5,7 @@ package index
 
 import (
 	"encoding/json"
-	"github.com/acoustid/go-acoustid/index/vfs"
+	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
 )

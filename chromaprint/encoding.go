@@ -6,7 +6,7 @@ package chromaprint
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"github.com/acoustid/go-acoustid/util/intcompress"
+	"github.com/acoustid/go-acoustid/util"
 	"github.com/pkg/errors"
 )
 
@@ -81,7 +81,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 		return errors.New("empty")
 	}
 
-	bits := intcompress.UnpackUint3Slice(data[offset:])
+	bits := util.UnpackUint3Slice(data[offset:])
 	numValues := 0
 	numExceptionalBits := 0
 	for bi, bit := range bits {
@@ -102,7 +102,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 	}
 
 	if numExceptionalBits > 0 {
-		exceptionalBits := intcompress.UnpackUint5Slice(data[offset:])
+		exceptionalBits := util.UnpackUint5Slice(data[offset:])
 		if len(exceptionalBits) != numExceptionalBits {
 			return errors.New("not enough data to decode exceptional bits")
 		}
@@ -175,8 +175,8 @@ func CompressFingerprint(fp Fingerprint) []byte {
 	data[2] = byte((len(fp.Hashes) & 0xFF00) >> 8)
 	data[3] = byte((len(fp.Hashes) & 0xFF) >> 0)
 
-	intcompress.PackUint3Slice(data[4:], normalBits)
-	intcompress.PackUint5Slice(data[4+normalBitsSize:], exceptionBits)
+	util.PackUint3Slice(data[4:], normalBits)
+	util.PackUint5Slice(data[4+normalBitsSize:], exceptionBits)
 
 	return data
 }

@@ -8,9 +8,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/acoustid/go-acoustid/index/vfs"
-	"github.com/acoustid/go-acoustid/util/bitset"
 	"github.com/acoustid/go-acoustid/util"
+	"github.com/acoustid/go-acoustid/util/bitset"
+	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -46,14 +46,14 @@ type SegmentMeta struct {
 }
 
 type Segment struct {
-	ID             uint32      `json:"id"`
-	UpdateID       uint32      `json:"updateid,omitempty"`
-	Meta           SegmentMeta `json:"meta"`
-	blockIndex     []uint32
-	reader         vfs.InputFile
-	docs           bitset.SparseBitSet
-	deletedDocs    *bitset.SparseBitSet
-	dirty          bool
+	ID          uint32      `json:"id"`
+	UpdateID    uint32      `json:"updateid,omitempty"`
+	Meta        SegmentMeta `json:"meta"`
+	blockIndex  []uint32
+	reader      vfs.InputFile
+	docs        bitset.SparseBitSet
+	deletedDocs *bitset.SparseBitSet
+	dirty       bool
 }
 
 // Size returns the estimated size of the segment file in bytes.  The actual file size might differ.
@@ -257,7 +257,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	s.Meta.MinDocID = it.MinDocID()
 	s.Meta.MaxDocID = it.MaxDocID()
 
-	s.docs.Init(1 + int(s.Meta.MaxDocID - s.Meta.MinDocID))
+	s.docs.Init(1 + int(s.Meta.MaxDocID-s.Meta.MinDocID))
 
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)

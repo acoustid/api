@@ -6,8 +6,8 @@ package main
 import (
 	"flag"
 	"github.com/acoustid/go-acoustid/index"
-	"github.com/acoustid/go-acoustid/index/vfs"
 	"github.com/acoustid/go-acoustid/index/server"
+	"github.com/acoustid/go-acoustid/util/vfs"
 	"log"
 	"net"
 	"strconv"

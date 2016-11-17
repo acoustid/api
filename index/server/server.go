@@ -5,11 +5,11 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/acoustid/go-acoustid/index"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
-	"github.com/acoustid/go-acoustid/index"
 )
 
 type context struct {

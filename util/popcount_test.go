@@ -1,12 +1,12 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package bits
+package util
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"testing"
 )
 
 func TestPopCount64(t *testing.T) {

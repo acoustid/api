@@ -1,21 +1,21 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package bits
+package util
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"math/rand"
 	"testing"
-	"fmt"
 )
 
 func TestPackUnpack(t *testing.T) {
-	cases := []struct{
-		bits uint
+	cases := []struct {
+		bits     uint
 		unpackFn func([]byte) []uint8
-		packFn func([]byte, []uint8) int
+		packFn   func([]byte, []uint8) int
 	}{
 		{bits: 1, unpackFn: UnpackUint1Slice, packFn: PackUint1Slice},
 		{bits: 2, unpackFn: UnpackUint2Slice, packFn: PackUint2Slice},
@@ -28,7 +28,7 @@ func TestPackUnpack(t *testing.T) {
 	for _, c := range cases {
 		values := make([]uint8, 256)
 		for i := range values {
-			values[i] = uint8((i+1) & (1<<c.bits - 1))
+			values[i] = uint8((i + 1) & (1<<c.bits - 1))
 		}
 
 		pack := func(i int) []byte {
