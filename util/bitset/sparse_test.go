@@ -34,6 +34,22 @@ func TestSparseBitSet(t *testing.T) {
 	}
 }
 
+func TestSparseBitSet_Union(t *testing.T) {
+	s1 := NewSparseBitSet(0)
+	s1.Add(1)
+	s1.Add(2)
+	s2 := NewSparseBitSet(0)
+	s2.Add(3)
+	s2.Add(1000)
+	s2.Add(1001)
+	s1.Union(s2)
+	require.True(t, s1.Contains(1))
+	require.True(t, s1.Contains(2))
+	require.True(t, s1.Contains(3))
+	require.True(t, s1.Contains(1000))
+	require.True(t, s1.Contains(1001))
+}
+
 func TestSparseBitSet_ReadWrite(t *testing.T) {
 	s := NewSparseBitSet(0)
 	data := make([]uint32, 1024)

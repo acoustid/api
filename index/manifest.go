@@ -13,12 +13,13 @@ import (
 const ManifestFilename = "manifest.json"
 
 type Manifest struct {
-	ID             uint32     `json:"id"`
-	NumDocs        int        `json:"ndocs"`
-	NumDeletedDocs int        `json:"ndeldocs,omitempty"`
-	NumItems       int        `json:"nitems"`
-	Checksum       uint32     `json:"checksum"`
-	Segments       []*Segment `json:"segments"`
+	ID             uint32              `json:"id"`
+	BaseID         uint32              `json:"-"`
+	NumDocs        int                 `json:"ndocs"`
+	NumDeletedDocs int                 `json:"ndeldocs,omitempty"`
+	NumItems       int                 `json:"nitems"`
+	Checksum       uint32              `json:"checksum"`
+	Segments       map[uint32]*Segment `json:"segments"`
 }
 
 // Resets removes all segments from the manifest.
@@ -27,21 +28,22 @@ func (m *Manifest) Reset() {
 	m.NumDeletedDocs = 0
 	m.NumItems = 0
 	m.Checksum = 0
-	m.Segments = m.Segments[:0]
+	m.Segments = make(map[uint32]*Segment)
 }
 
 // Clone creates a copy of the manifest that can be updated independently.
 func (m *Manifest) Clone() *Manifest {
 	m2 := &Manifest{
-		ID:             m.ID,
+		ID:             0,
+		BaseID:         m.ID,
 		NumDocs:        m.NumDocs,
 		NumDeletedDocs: m.NumDeletedDocs,
 		NumItems:       m.NumItems,
 		Checksum:       m.Checksum,
-		Segments:       make([]*Segment, len(m.Segments)),
+		Segments:       make(map[uint32]*Segment, len(m.Segments)),
 	}
-	for i, s := range m.Segments {
-		m2.Segments[i] = s.Clone()
+	for _, s := range m.Segments {
+		m2.Segments[s.ID] = s.Clone()
 	}
 	return m2
 }
@@ -52,33 +54,26 @@ func (m *Manifest) AddSegment(s *Segment) {
 	m.NumDeletedDocs += s.Meta.NumDeletedDocs
 	m.NumItems += s.Meta.NumItems
 	m.Checksum += s.Meta.Checksum
-	m.Segments = append(m.Segments, s)
+	m.Segments[s.ID] = s
 }
 
 // RemoveSegment removes a segment from the manifest and updates all internal stats.
 func (m *Manifest) RemoveSegment(s *Segment) {
-	segments := m.Segments
-	m.Segments = m.Segments[:0]
-	for _, s2 := range segments {
-		if s2 == s {
-			m.NumDocs -= s2.Meta.NumDocs
-			m.NumDeletedDocs -= s2.Meta.NumDeletedDocs
-			m.NumItems -= s2.Meta.NumItems
-			m.Checksum -= s2.Meta.Checksum
-		} else {
-			m.Segments = append(m.Segments, s2)
-		}
-	}
+	m.NumDocs -= s.Meta.NumDocs
+	m.NumDeletedDocs -= s.Meta.NumDeletedDocs
+	m.NumItems -= s.Meta.NumItems
+	m.Checksum -= s.Meta.Checksum
+	delete(m.Segments, s.ID)
 }
 
 func (m *Manifest) UpdateStats() {
 	m.NumDocs = 0
 	m.NumDeletedDocs = 0
 	m.NumItems = 0
-	for _, segment := range m.Segments {
-		m.NumDocs += segment.NumDocs()
-		m.NumDeletedDocs += segment.NumDeletedDocs()
-		m.NumItems += segment.NumItems()
+	for _, s := range m.Segments {
+		m.NumDocs += s.NumDocs()
+		m.NumDeletedDocs += s.NumDeletedDocs()
+		m.NumItems += s.NumItems()
 	}
 }
 
@@ -86,6 +81,7 @@ func (m *Manifest) Load(fs vfs.FileSystem, create bool) error {
 	file, err := fs.OpenFile(ManifestFilename)
 	if err != nil {
 		if vfs.IsNotExist(err) && create {
+			m.Reset()
 			m.ID = 1
 			return m.Save(fs)
 		}
@@ -104,4 +100,49 @@ func (m *Manifest) Save(fs vfs.FileSystem) error {
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(m)
 	})
+}
+
+// Rebase updates the manifest to include all changes from base, as if it was originally cloned from that.
+func (m *Manifest) Rebase(base *Manifest) error {
+	if m.BaseID == base.ID {
+		return nil
+	}
+
+	if m.ID != 0 {
+		return errors.New("can't rebase committed manifest")
+	}
+
+	for _, s := range base.Segments {
+		if s.dirty {
+			return errors.New("base manifest can't have dirty segments")
+		}
+	}
+
+	// Find segments in the base manifest that had some docs deleted in between and apply the deletes to our segments.
+	for _, s := range m.Segments {
+		s2 := base.Segments[s.ID]
+		if s2 != nil && s2.deletedDocs != nil && s.UpdateID != s2.UpdateID {
+			if s.deletedDocs == nil {
+				s.deletedDocs = s2.deletedDocs
+				s.Meta.NumDeletedDocs = s2.Meta.NumDeletedDocs
+				s.UpdateID = s2.UpdateID
+			} else {
+				s.deletedDocs.Union(s2.deletedDocs)
+				s.Meta.NumDeletedDocs = s.deletedDocs.Len()
+				s.dirty = true
+			}
+		}
+	}
+
+	// Copy segments that are only present in the base manifest.
+	for _, s := range base.Segments {
+		_, exists := m.Segments[s.ID]
+		if !exists {
+			m.AddSegment(s.Clone())
+		}
+	}
+
+	m.BaseID = base.ID
+
+	return nil
 }

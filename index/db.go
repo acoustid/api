@@ -135,7 +135,6 @@ func (db *DB) newSnapshot(write bool) *Snapshot {
 	manifest := db.manifest.Load().(*Manifest)
 	if write {
 		manifest = manifest.Clone()
-		manifest.ID = 0
 	}
 	return &Snapshot{manifest: manifest}
 }
@@ -151,6 +150,8 @@ func (db *DB) commit(manifest *Manifest) error {
 	if db.closed {
 		return ErrAlreadyClosed
 	}
+
+	manifest.Rebase(db.manifest.Load().(*Manifest))
 
 	manifest.ID = atomic.AddUint32(&db.txid, 1)
 	manifest.UpdateStats()

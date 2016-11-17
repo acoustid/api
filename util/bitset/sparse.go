@@ -86,6 +86,22 @@ func (s *SparseBitSet) Contains(x uint32) bool {
 	return block[j]&mask != 0
 }
 
+// Union updates the set to include all elements from s2.
+func (s *SparseBitSet) Union(s2 *SparseBitSet) {
+	for i, block2 := range s2.blocks {
+		block, exists := s.blocks[i]
+		if !exists {
+			block = make([]uint64, blockWords)
+			copy(block, block2)
+			s.blocks[i] = block
+		} else {
+			for j, mask := range block2 {
+				block[j] |= mask
+			}
+		}
+	}
+}
+
 // Len computes the number of elements in the set. It executes in time proportional to the number of elements.
 func (s *SparseBitSet) Len() int {
 	var n int
