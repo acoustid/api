@@ -123,7 +123,7 @@ func (m *Manifest) Rebase(base *Manifest) error {
 		s2 := base.Segments[s.ID]
 		if s2 != nil && s2.deletedDocs != nil && s.UpdateID != s2.UpdateID {
 			if s.deletedDocs == nil {
-				s.deletedDocs = s2.deletedDocs
+				s.deletedDocs = s2.deletedDocs.Clone()
 				s.Meta.NumDeletedDocs = s2.Meta.NumDeletedDocs
 				s.UpdateID = s2.UpdateID
 			} else {
