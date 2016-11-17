@@ -153,6 +153,7 @@ func (db *DB) commit(manifest *Manifest) error {
 	}
 
 	manifest.ID = atomic.AddUint32(&db.txid, 1)
+	manifest.UpdateStats()
 
 	for _, segment := range manifest.Segments {
 		err := segment.SaveUpdate(db.fs, manifest.ID)
@@ -188,4 +189,14 @@ func (db *DB) Reader() ItemReader {
 func (db *DB) NumSegments() int {
 	manifest := db.manifest.Load().(*Manifest)
 	return len(manifest.Segments)
+}
+
+func (db *DB) NumDocs() int {
+	manifest := db.manifest.Load().(*Manifest)
+	return manifest.NumDocs
+}
+
+func (db *DB) NumDeletedDocs() int {
+	manifest := db.manifest.Load().(*Manifest)
+	return manifest.NumDeletedDocs
 }
