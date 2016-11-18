@@ -147,21 +147,12 @@ func (db *DB) commit(manifest *Manifest) error {
 		return ErrAlreadyClosed
 	}
 
-	manifest.Rebase(db.manifest.Load().(*Manifest))
-	manifest.ID = atomic.AddUint32(&db.txid, 1)
+	base := db.manifest.Load().(*Manifest)
+	id := atomic.AddUint32(&db.txid, 1)
 
-	for _, segment := range manifest.Segments {
-		err := segment.SaveUpdate(db.fs, manifest.ID)
-		if err != nil {
-			manifest.ID = 0
-			return errors.Wrap(err, "failed to save segment update")
-		}
-	}
-
-	err := manifest.Save(db.fs)
+	err := manifest.Commit(db.fs, base, id)
 	if err != nil {
-		manifest.ID = 0
-		return errors.Wrap(err, "failed to save manifest")
+		return errors.Wrap(err, "manifest commit failed")
 	}
 
 	db.manifest.Store(manifest)

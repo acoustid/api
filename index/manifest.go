@@ -162,7 +162,7 @@ func (m *Manifest) Rebase(base *Manifest) error {
 				if hasDeletes {
 					return errors.New("conflicting manifests, both have deleted segments")
 				} else {
-					delete(m.Segments, id)
+					m.RemoveSegment(segment)
 				}
 			} else {
 				addedDocs.Union(&segment.docs)
@@ -186,6 +186,27 @@ func (m *Manifest) Rebase(base *Manifest) error {
 	}
 
 	m.BaseID = base.ID
+	return nil
+}
 
+func (m *Manifest) Commit(fs vfs.FileSystem, base *Manifest, id uint32) error {
+	err := m.Rebase(base)
+	if err != nil {
+		return errors.Wrap(err, "rebase failed")
+	}
+
+	for _, segment := range m.Segments {
+		err = segment.SaveUpdate(fs, id)
+		if err != nil {
+			return errors.Wrap(err, "segment update failed")
+		}
+	}
+
+	err = m.Save(fs)
+	if err != nil {
+		return errors.Wrap(err, "save failed")
+	}
+
+	m.ID = id
 	return nil
 }
