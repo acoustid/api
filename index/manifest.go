@@ -132,36 +132,51 @@ func (m *Manifest) Rebase(base *Manifest) error {
 		}
 	}
 
-	// Find segments in the base manifest that had some docs deleted in between and apply the deletes to our segments.
-	for _, s := range m.Segments {
-		s2 := base.Segments[s.ID]
-		if s2 != nil && s2.deletedDocs != nil && s.UpdateID != s2.UpdateID {
-			if !s.dirty {
-				s.deletedDocs = s2.deletedDocs
-				s.Meta.NumDeletedDocs = s2.Meta.NumDeletedDocs
-				s.UpdateID = s2.UpdateID
-				continue
-			}
-			s.DeleteMulti(s2.deletedDocs)
+	// Check if we have any deleted segments in our manifest.
+	hasDeletes := false
+	for id := range base.Segments {
+		_, exists := m.Segments[id]
+		if !exists && id <= m.BaseID {
+			hasDeletes = true
 		}
 	}
 
-	// Build a set of docs added during the transaction.
+	// 1) Find segments in the base manifest that had some docs deleted in between and apply the deletes to our segments.
+	// 2) Remove segments that have been removed from the base manifest.
+	// 3) Build a set of docs from segments added in our transaction to be used later for de-duplication.
 	addedDocs := bitset.NewSparseBitSet(0)
-	for _, s := range m.Segments {
-		_, exists := base.Segments[s.ID]
-		if !exists {
-			addedDocs.Union(&s.docs)
+	for id, segment := range m.Segments {
+		baseSegment, exists := base.Segments[id]
+		if exists {
+			if segment.UpdateID < baseSegment.UpdateID {
+				if segment.dirty {
+					segment.DeleteMulti(baseSegment.deletedDocs)
+				} else {
+					segment.deletedDocs = baseSegment.deletedDocs
+					segment.Meta.NumDeletedDocs = baseSegment.Meta.NumDeletedDocs
+				}
+				segment.UpdateID = baseSegment.UpdateID
+			}
+		} else {
+			if id <= m.BaseID {
+				if hasDeletes {
+					return errors.New("conflicting manifests, both have deleted segments")
+				} else {
+					delete(m.Segments, id)
+				}
+			} else {
+				addedDocs.Union(&segment.docs)
+			}
 		}
 	}
 
 	// Copy segments that are only present in the base manifest, but delete duplicate docs from them.
-	for _, s := range base.Segments {
-		_, exists := m.Segments[s.ID]
-		if !exists {
-			s2 := s.Clone()
-			s2.DeleteMulti(addedDocs)
-			m.addSegment(s2, false)
+	for id, segment := range base.Segments {
+		_, exists := m.Segments[id]
+		if !exists && id > m.BaseID {
+			segment := segment.Clone()
+			segment.DeleteMulti(addedDocs)
+			m.addSegment(segment, false)
 		}
 	}
 
