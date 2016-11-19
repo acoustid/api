@@ -4,110 +4,106 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"flag"
-	"fmt"
 	"io"
 	"log"
-	"math"
 	"os"
+	"github.com/pkg/errors"
+	"github.com/acoustid/go-acoustid/util"
+	"fmt"
 )
 
-const BlockSize = 512
-
-func main() {
-	fileFlag := flag.String("file", "", "segment file to dump")
-	flag.Parse()
-
-	if *fileFlag == "" {
-		log.Fatal("no input file")
-	}
-
-	file, err := os.Open(*fileFlag)
+func readBlockIndex(name string) ([]uint32, error) {
+	file, err := os.Open(name)
 	if err != nil {
-		log.Fatalf("failed to open the file (%v)", err)
+		return nil, errors.Wrap(err, "open failed")
 	}
 	defer file.Close()
 
-	buf := make([]byte, BlockSize)
-
-	i := 0
+	var blockIndex []uint32
 	for {
-		_, err := file.Read(buf)
+		var x uint32
+		err := binary.Read(file, binary.BigEndian, &x)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			log.Fatalf("error while reading block data (%v)", err)
+			return nil, err
 		}
+		blockIndex = append(blockIndex, x)
+	}
+	return blockIndex, nil
+}
 
-		reader := bytes.NewReader(buf)
+func readData(name string, blockSize int, blockIndex []uint32) error {
+	file, err := os.Open(name)
+	if err != nil {
+		return errors.Wrap(err, "open failed")
+	}
+	defer file.Close()
 
-		var n uint16
-		err = binary.Read(reader, binary.BigEndian, &n)
+	buf := make([]byte, blockSize)
+
+	for _, term := range blockIndex {
+		_, err := io.ReadFull(file, buf)
 		if err != nil {
-			log.Fatalf("error while parsing block header (%v)", err)
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+			return errors.Wrap(err, "read failed")
 		}
 
-		type KV struct {
-			term  uint32
-			docID uint32
-		}
-		block := make([]KV, 0, int(n))
+		numItems := int(binary.BigEndian.Uint16(buf))
+		ptr := 2
 
-		var term, docID uint32
-		for j := 0; j < int(n); j++ {
-			var v1 uint64
+		var docID uint32
+		for j := 0; j < numItems; j++ {
 			if j > 0 {
-				v1, err = binary.ReadUvarint(reader)
-				if err != nil {
-					log.Fatalf("error while parsing block data (%v)", err)
+				delta, n := util.Uvarint32(buf[ptr:])
+				if n < 0 {
+					return errors.New("error while parsing block data")
 				}
+				if delta > 0 {
+					docID = 0
+				}
+				term += delta
+				ptr += n
 			}
-			v2, err := binary.ReadUvarint(reader)
-			if err != nil {
-				log.Fatalf("error while parsing block data (%v)", err)
+
+			delta, n := util.Uvarint32(buf[ptr:])
+			if n < 0 {
+				return errors.New("error while parsing block data")
 			}
-			if v1 > 0 {
-				docID = 0
-			}
-			term += uint32(v1)
-			docID += uint32(v2)
-			//			fmt.Printf("  %v -> %v\n", v1, docID)
-			//			fmt.Printf("  %08x -> %v\n", term, docID)
-			//			block = append(block, KV{term, docID})
-			block = append(block, KV{uint32(v1 >> 4), docID})
+			docID += delta
+			ptr += n
+
+			fmt.Printf("%d %d\n", term>>4, docID)
 		}
+	}
+	return nil
+}
 
-		maxDocID := uint32(0)
-		minDocID := uint32(math.MaxUint32)
-		maxTerm := uint32(0)
-		minTerm := uint32(math.MaxUint32)
-		for _, kv := range block {
-			if kv.docID < minDocID {
-				minDocID = kv.docID
-			}
-			if kv.docID > maxDocID {
-				maxDocID = kv.docID
-			}
-			if kv.term < minTerm {
-				minTerm = kv.term
-			}
-			if kv.term > maxTerm {
-				maxTerm = kv.term
-			}
-		}
+func main() {
+	var (
+		dataFilename = flag.String("d", "", "segment data file to dump")
+		indexFilename = flag.String("i", "", "segment index file to dump")
+		blockSize = flag.Int("b", 512, "block size")
+	)
 
-		fmt.Printf("#%v items=%v terms=%v termbits=%v docids=%v docidbits=%v\n", i, n,
-			maxTerm-minTerm, math.Ceil(math.Log2(float64(maxTerm-minTerm))),
-			maxDocID-minDocID, math.Ceil(math.Log2(float64(maxDocID-minDocID))))
+	flag.Parse()
 
-		//		for _, kv := range block {
-		//			fmt.Printf("  %v -> %v\n", kv.term>>4, kv.docID)
-		//			fmt.Printf("  %v -> %v\n", kv.term>>4, kv.docID-minDocID)
-		//		}
+	if *dataFilename == "" || *indexFilename == "" {
+		log.Fatal("no input file")
+	}
 
-		i++
+	blockIndex, err := readBlockIndex(*indexFilename)
+	if err != nil {
+		log.Fatalf("error while reading index: %v", err)
+	}
+
+	err = readData(*dataFilename, *blockSize, blockIndex)
+	if err != nil {
+		log.Fatalf("error while reading data: %v", err)
 	}
 }
