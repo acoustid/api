@@ -9,3 +9,5 @@ test:
   stage: test
   script:
     - go test -v ./{api,index,chromaprint,util}/...
+  tags:
+    - docker
