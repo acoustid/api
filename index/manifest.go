@@ -16,9 +16,9 @@ const ManifestFilename = "manifest.json"
 type Manifest struct {
 	ID              uint32              `json:"id"`
 	BaseID          uint32              `json:"-"`
-	NumDocs         int                 `json:"ndocs"`
-	NumDeletedDocs  int                 `json:"ndeldocs,omitempty"`
-	NumItems        int                 `json:"nitems"`
+	NumDocs         int                 `json:"docs"`
+	NumDeletedDocs  int                 `json:"deleted_docs,omitempty"`
+	NumItems        int                 `json:"items"`
 	Checksum        uint32              `json:"checksum"`
 	Segments        map[uint32]*Segment `json:"segments"`
 	addedSegments   map[uint32]struct{}

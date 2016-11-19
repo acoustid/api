@@ -32,17 +32,16 @@ var (
 )
 
 type SegmentMeta struct {
-	Format         int    `json:"format"`
 	Checksum       uint32 `json:"checksum"`
-	BlockSize      int    `json:"blocksize"`
-	NumBlocks      int    `json:"nblocks"`
-	NumDocs        int    `json:"ndocs"`
-	NumDeletedDocs int    `json:"ndeldocs,omitempty"`
-	NumItems       int    `json:"nitems"`
-	MinTerm        uint32 `json:"minterm"`
-	MaxTerm        uint32 `json:"maxterm"`
-	MinDocID       uint32 `json:"mindocid"`
-	MaxDocID       uint32 `json:"maxdocid"`
+	BlockSize      int    `json:"block_size"`
+	NumBlocks      int    `json:"blocks"`
+	NumDocs        int    `json:"docs"`
+	NumDeletedDocs int    `json:"deleted_docs,omitempty"`
+	NumItems       int    `json:"items"`
+	MinTerm        uint32 `json:"min_term"`
+	MaxTerm        uint32 `json:"max_term"`
+	MinDocID       uint32 `json:"min_docid"`
+	MaxDocID       uint32 `json:"max_docid"`
 }
 
 type Segment struct {
