@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/acoustid/go-acoustid/util"
-	"github.com/acoustid/go-acoustid/util/bitset"
+	"github.com/acoustid/go-acoustid/util/intset"
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
 	"io"
@@ -50,8 +50,8 @@ type Segment struct {
 	Meta        SegmentMeta `json:"meta"`
 	blockIndex  []uint32
 	reader      vfs.InputFile
-	docs        bitset.SparseBitSet
-	deletedDocs *bitset.SparseBitSet
+	docs        *intset.SparseBitSet
+	deletedDocs *intset.SparseBitSet
 	dirty       bool
 }
 
@@ -129,18 +129,21 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 		return errors.Wrap(err, "seek failed")
 	}
 
-	s.blockIndex = make([]uint32, s.Meta.NumBlocks)
-	err = binary.Read(file, binary.LittleEndian, s.blockIndex)
+	blockIndex := make([]uint32, s.Meta.NumBlocks)
+	err = binary.Read(file, binary.LittleEndian, blockIndex)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "block index read failed")
 	}
+	s.blockIndex = blockIndex
 
-	err = s.docs.Read(file)
+	var docs intset.SparseBitSet
+	err = docs.Read(file)
 	if err != nil {
 		file.Close()
 		return errors.Wrap(err, "docID set read failed")
 	}
+	s.docs = &docs
 
 	err = s.LoadUpdate(fs)
 	if err != nil {
@@ -253,7 +256,7 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	writer := bufio.NewWriter(file)
 
-	s.docs.Init(0)
+	s.docs = intset.NewSparseBitSet(0)
 
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)
@@ -429,7 +432,7 @@ func (s *Segment) Delete(docID uint32) bool {
 		return false
 	}
 	if s.deletedDocs == nil {
-		s.deletedDocs = bitset.NewSparseBitSet(1)
+		s.deletedDocs = intset.NewSparseBitSet(1)
 	} else if !s.dirty {
 		s.deletedDocs = s.deletedDocs.Clone()
 	}
@@ -439,7 +442,7 @@ func (s *Segment) Delete(docID uint32) bool {
 	return true
 }
 
-func (s *Segment) DeleteMulti(docs *bitset.SparseBitSet) bool {
+func (s *Segment) DeleteMulti(docs *intset.SparseBitSet) bool {
 	deletedDocs, numDeletedDocs := s.docs.Intersection(docs)
 	if numDeletedDocs == 0 {
 		return false
@@ -481,7 +484,7 @@ func (s *Segment) LoadUpdate(fs vfs.FileSystem) error {
 	}
 	defer file.Close()
 
-	s.deletedDocs = bitset.NewSparseBitSet(0)
+	s.deletedDocs = intset.NewSparseBitSet(0)
 	err = s.deletedDocs.Read(file)
 	if err != nil {
 		return errors.Wrap(err, "read failed")

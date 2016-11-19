@@ -69,7 +69,7 @@ func (m *Manifest) addSegment(s *Segment, dedupe bool) {
 	if dedupe {
 		m.NumDeletedDocs = s.Meta.NumDeletedDocs
 		for _, s2 := range m.Segments {
-			s2.DeleteMulti(&s.docs)
+			s2.DeleteMulti(s.docs)
 			m.NumDeletedDocs += s2.Meta.NumDeletedDocs
 		}
 	} else {
@@ -195,7 +195,7 @@ func (m *Manifest) rebase(base *Manifest) error {
 				segment := segment.Clone()
 				if len(m.removedSegments) == 0 {
 					for id2 := range m.addedSegments {
-						segment.DeleteMulti(&m.Segments[id2].docs)
+						segment.DeleteMulti(m.Segments[id2].docs)
 					}
 					for id2 := range updatedSegments {
 						segment.DeleteMulti(m.Segments[id2].deletedDocs)

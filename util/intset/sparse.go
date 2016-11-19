@@ -1,7 +1,7 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package bitset
+package intset
 
 import (
 	"encoding/binary"
@@ -12,11 +12,11 @@ import (
 
 const (
 	wordBits   = 64
-	blockWords = 32 // 256 bytes
+	blockWords = 128 // 1024 bytes
 	blockBits  = blockWords * wordBits
 )
 
-// SparseBitSet is an efficient set of uint32 elements.
+// SparseBitSet is a set of uint32s implemented as a map of small fixed-width bitsets.
 type SparseBitSet struct {
 	blocks map[uint32][]uint64
 }
@@ -173,11 +173,11 @@ func (s *SparseBitSet) Max() uint32 {
 			}
 		}
 		block := s.blocks[mi]
-		for j := 0; j < blockWords; j++ {
+		for j := blockWords-1; j >= 0; j-- {
 			if block[j] == 0 {
 				continue
 			}
-			for k := wordBits; k > 0; k-- {
+			for k := wordBits-1; k >= 0; k-- {
 				mask := uint64(1) << uint(k)
 				if block[j]&mask != 0 {
 					return mi*blockBits + uint32(j)*wordBits + uint32(k)

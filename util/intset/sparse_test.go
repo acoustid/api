@@ -1,7 +1,7 @@
 // Copyright (C) 2016  Lukas Lalinsky
 // Distributed under the MIT license, see the LICENSE file for details.
 
-package bitset
+package intset
 
 import (
 	"bytes"
@@ -80,6 +80,28 @@ func TestSparseBitSet_MinMax(t *testing.T) {
 	s.Add(2999)
 	s.Add(3000)
 	s.Add(100)
-	assert.EqualValues(t, 3, s.Min())
-	assert.EqualValues(t, 3000, s.Max())
+	assert.EqualValues(t, 3, s.Min(), "wrong min value")
+	assert.EqualValues(t, 3000, s.Max(), "wrong max value")
+}
+
+func BenchmarkSparseBitSet_Contains(b *testing.B) {
+	s := NewSparseBitSet(0)
+	for i := 0; i < 1000; i++ {
+		x := rand.Uint32() & 0xffff
+		s.Add(x)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		s.Contains(rand.Uint32() & 0xffff)
+	}
+}
+
+func BenchmarkSparseBitSet_Add(b *testing.B) {
+	b.ReportAllocs()
+	s := NewSparseBitSet(0)
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < 1000; i++ {
+			s.Add(rand.Uint32() & 0xfffff)
+		}
+	}
 }
