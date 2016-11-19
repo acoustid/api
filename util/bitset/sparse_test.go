@@ -72,3 +72,14 @@ func TestSparseBitSet_ReadWrite(t *testing.T) {
 		assert.True(t, s.Contains(x), "should contain %d, but it does not", x)
 	}
 }
+
+func TestSparseBitSet_MinMax(t *testing.T) {
+	s := NewSparseBitSet(0)
+	s.Add(4)
+	s.Add(3)
+	s.Add(2999)
+	s.Add(3000)
+	s.Add(100)
+	assert.EqualValues(t, 3, s.Min())
+	assert.EqualValues(t, 3000, s.Max())
+}

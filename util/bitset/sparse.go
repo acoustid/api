@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"github.com/acoustid/go-acoustid/util"
 	"io"
+	"math"
 )
 
 const (
@@ -129,6 +130,62 @@ func (s *SparseBitSet) Len() int {
 		n += util.PopCount64Slice(block)
 	}
 	return n
+}
+
+// Min returns the smallest element in the set.
+func (s *SparseBitSet) Min() uint32 {
+	for {
+		if len(s.blocks) == 0 {
+			return 0
+		}
+		var mi uint32 = math.MaxUint32
+		for i := range s.blocks {
+			if i < mi {
+				mi = i
+			}
+		}
+		block := s.blocks[mi]
+		for j := 0; j < blockWords; j++ {
+			if block[j] == 0 {
+				continue
+			}
+			for k := 0; k < wordBits; k++ {
+				mask := uint64(1) << uint(k)
+				if block[j]&mask != 0 {
+					return mi*blockBits + uint32(j)*wordBits + uint32(k)
+				}
+			}
+		}
+		delete(s.blocks, mi) // found an empty block
+	}
+}
+
+// Max returns the largest element in the set.
+func (s *SparseBitSet) Max() uint32 {
+	for {
+		if len(s.blocks) == 0 {
+			return 0
+		}
+		var mi uint32 = 0
+		for i := range s.blocks {
+			if i > mi {
+				mi = i
+			}
+		}
+		block := s.blocks[mi]
+		for j := 0; j < blockWords; j++ {
+			if block[j] == 0 {
+				continue
+			}
+			for k := wordBits; k > 0; k-- {
+				mask := uint64(1) << uint(k)
+				if block[j]&mask != 0 {
+					return mi*blockBits + uint32(j)*wordBits + uint32(k)
+				}
+			}
+		}
+		delete(s.blocks, mi) // found an empty block
+	}
 }
 
 // Compact removes unused blocks from the set.

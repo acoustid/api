@@ -64,9 +64,8 @@ func (s *Segment) Size() int {
 
 func (s *Segment) NumDocs() int        { return s.Meta.NumDocs }
 func (s *Segment) NumDeletedDocs() int { return s.Meta.NumDeletedDocs }
+func (s *Segment) NumLiveDocs() int    { return s.Meta.NumDocs - s.Meta.NumDeletedDocs }
 func (s *Segment) NumItems() int       { return s.Meta.NumItems }
-func (s *Segment) MinDocID() uint32    { return s.Meta.MinDocID }
-func (s *Segment) MaxDocID() uint32    { return s.Meta.MaxDocID }
 
 func (s *Segment) Clone() *Segment {
 	return &Segment{
@@ -85,7 +84,6 @@ func CreateSegment(fs vfs.FileSystem, id uint32, input ItemReader) (*Segment, er
 		ID: id,
 		Meta: SegmentMeta{
 			BlockSize: DefaultBlockSize,
-			MinTerm:   math.MaxUint32,
 		},
 	}
 
@@ -207,16 +205,21 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 		s.docs.Add(it.DocID)
 	}
 
+	if s.Meta.NumBlocks > 0 {
+		if s.Meta.MinTerm > input[0].Term {
+			s.Meta.MinTerm = input[0].Term
+		}
+		if s.Meta.MaxTerm < input[n-1].Term {
+			s.Meta.MaxTerm = input[n-1].Term
+		}
+	} else {
+		s.Meta.MinTerm = input[0].Term
+		s.Meta.MaxTerm = input[n-1].Term
+	}
+
 	s.Meta.NumItems += n
 	s.Meta.NumBlocks += 1
 	s.blockIndex = append(s.blockIndex, input[0].Term)
-
-	if s.Meta.MinTerm > input[0].Term {
-		s.Meta.MinTerm = input[0].Term
-	}
-	if s.Meta.MaxTerm < input[n-1].Term {
-		s.Meta.MaxTerm = input[n-1].Term
-	}
 
 	var header [BlockHeaderSize]byte
 	binary.LittleEndian.PutUint16(header[0:], uint16(n))
@@ -251,11 +254,7 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 	writer := bufio.NewWriter(file)
 
-	s.Meta.NumDocs = it.NumDocs()
-	s.Meta.MinDocID = it.MinDocID()
-	s.Meta.MaxDocID = it.MaxDocID()
-
-	s.docs.Init(1 + int(s.Meta.MaxDocID-s.Meta.MinDocID))
+	s.docs.Init(0)
 
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)
@@ -299,9 +298,9 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		remaining = append(remaining, block...)
 	}
 
-	if s.Meta.NumDocs == -1 {
-		s.Meta.NumDocs = s.docs.Len()
-	}
+	s.Meta.NumDocs = s.docs.Len()
+	s.Meta.MinDocID = s.docs.Min()
+	s.Meta.MaxDocID = s.docs.Max()
 
 	err := binary.Write(writer, binary.LittleEndian, s.blockIndex)
 	if err != nil {

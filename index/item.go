@@ -4,7 +4,6 @@
 package index
 
 import (
-	"github.com/acoustid/go-acoustid/util"
 	"go4.org/sort"
 	"io"
 	"math"
@@ -18,14 +17,6 @@ type Item struct {
 
 // ItemReader is an abstraction for iterating over Items by blocks.
 type ItemReader interface {
-	// NumDocs returns the number of docs the source of this reader contains.
-	NumDocs() int
-	// NumItems returns the number of items the source of this reader contains.
-	NumItems() int
-	// MinDocID returns the smallest docID this reader can return.
-	MinDocID() uint32
-	// MaxDocID returns the largest docID this reader can return.
-	MaxDocID() uint32
 	// Read reads a block of Items.
 	ReadBlock() (items []Item, err error)
 }
@@ -129,11 +120,6 @@ type itemBufferReader struct {
 	pos int
 }
 
-func (r *itemBufferReader) NumDocs() int     { return r.ib.NumDocs() }
-func (r *itemBufferReader) NumItems() int    { return r.ib.NumItems() }
-func (r *itemBufferReader) MinDocID() uint32 { return r.ib.MinDocID() }
-func (r *itemBufferReader) MaxDocID() uint32 { return r.ib.MaxDocID() }
-
 func (r *itemBufferReader) ReadBlock() (items []Item, err error) {
 	if r.pos >= len(r.ib.items) {
 		err = io.EOF
@@ -172,24 +158,11 @@ type multiItemReader struct {
 	reader1, reader2 ItemReader
 	block1, block2   []Item
 	buf              []Item
-	numDocs          int
-	numItems         int
-	minDocID         uint32
-	maxDocID         uint32
 }
 
 func (r *multiItemReader) init() {
 	r.buf = make([]Item, 1024)
-	r.numDocs = r.reader1.NumDocs() + r.reader2.NumDocs()
-	r.numItems = r.reader1.NumItems() + r.reader2.NumItems()
-	r.minDocID = util.MinUint32(r.reader1.MinDocID(), r.reader2.MinDocID())
-	r.maxDocID = util.MaxUint32(r.reader1.MaxDocID(), r.reader2.MaxDocID())
 }
-
-func (r *multiItemReader) NumDocs() int     { return r.numDocs }
-func (r *multiItemReader) NumItems() int    { return r.numItems }
-func (r *multiItemReader) MinDocID() uint32 { return r.minDocID }
-func (r *multiItemReader) MaxDocID() uint32 { return r.maxDocID }
 
 func (r *multiItemReader) ReadBlock() (items []Item, err error) {
 	if len(r.block1) == 0 && r.reader1 != nil {

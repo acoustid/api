@@ -22,11 +22,6 @@ type channelReader struct {
 	ch <-chan block
 }
 
-func (r *channelReader) NumDocs() int     { return -1 }
-func (r *channelReader) NumItems() int    { return -1 }
-func (r *channelReader) MinDocID() uint32 { return 0 }
-func (r *channelReader) MaxDocID() uint32 { return 0 }
-
 func (r *channelReader) ReadBlock() ([]index.Item, error) {
 	block, ok := <-r.ch
 	if !ok {

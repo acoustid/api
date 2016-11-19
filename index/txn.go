@@ -10,35 +10,13 @@ import (
 
 type Transaction struct {
 	*Snapshot
-	db          *DB
-	buffer      ItemBuffer
-	addedSegments map[uint32]*Segment
-	removedSegments []*Segment
+	db     *DB
+	buffer ItemBuffer
 }
 
 const MaxBufferedItems = 1024 * 1024
 
 var ErrCommitted = errors.New("transaction is already committed")
-
-func (txn *Transaction) init() {
-	txn.addedSegments = make(map[uint32]*Segment)
-}
-
-func (txn *Transaction) NumDocs() int {
-	n := txn.buffer.NumDocs()
-	for _, segment := range txn.manifest.Segments {
-		n += segment.Meta.NumDocs - segment.Meta.NumDeletedDocs
-	}
-	return n
-}
-
-func (txn *Transaction) NumItems() int {
-	n := txn.buffer.NumItems()
-	for _, segment := range txn.manifest.Segments {
-		n += segment.Meta.NumItems
-	}
-	return n
-}
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	if txn.Committed() {

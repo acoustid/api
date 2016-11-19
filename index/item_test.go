@@ -17,7 +17,6 @@ func TestMergeItemReaders(t *testing.T) {
 	buf3.Add(3, []uint32{1, 50, 100})
 	buf3.Add(4, []uint32{2})
 	reader := MergeItemReaders(buf1.Reader(), buf2.Reader(), buf3.Reader())
-	assert.Equal(t, 4, reader.NumDocs())
 	var items []Item
 	for {
 		block, err := reader.ReadBlock()
