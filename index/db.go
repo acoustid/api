@@ -157,8 +157,8 @@ func (db *DB) commit(manifest *Manifest) error {
 
 	db.manifest.Store(manifest)
 
-	log.Printf("committed transaction %d (docs=%v, segments=%v, checksum=0x%08x)",
-		manifest.ID, manifest.NumDocs, len(manifest.Segments), manifest.Checksum)
+	log.Printf("committed transaction %d (docs=%v, items=%v, segments=%v, checksum=%d)",
+		manifest.ID, manifest.NumDocs-manifest.NumDeletedDocs, manifest.NumItems, len(manifest.Segments), manifest.Checksum)
 
 	return nil
 }

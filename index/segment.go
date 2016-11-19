@@ -91,8 +91,6 @@ func CreateSegment(fs vfs.FileSystem, id uint32, input ItemReader) (*Segment, er
 
 	started := time.Now()
 
-	log.Printf("started segment %v", s.ID)
-
 	name := s.fileName()
 	file, err := fs.CreateAtomicFile(name)
 	if err != nil {
@@ -110,8 +108,8 @@ func CreateSegment(fs vfs.FileSystem, id uint32, input ItemReader) (*Segment, er
 		return nil, errors.Wrap(err, "file commit failed")
 	}
 
-	log.Printf("completed segment %v with data file '%v' (docs=%v, blocks=%v, checksum=0x%08x, duration=%s)",
-		s.ID, name, s.Meta.NumDocs, s.Meta.NumBlocks, s.Meta.Checksum, time.Since(started))
+	log.Printf("created segment %v (docs=%v, items=%v, blocks=%v, checksum=%v, duration=%s)",
+		s.ID, s.Meta.NumDocs, s.Meta.NumItems, s.Meta.NumBlocks, s.Meta.Checksum, time.Since(started))
 
 	s.reader, err = fs.OpenFile(name)
 	if err != nil {
@@ -299,6 +297,10 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 			block = block[n:]
 		}
 		remaining = append(remaining, block...)
+	}
+
+	if s.Meta.NumDocs == -1 {
+		s.Meta.NumDocs = s.docs.Len()
 	}
 
 	err := binary.Write(writer, binary.LittleEndian, s.blockIndex)

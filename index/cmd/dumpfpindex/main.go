@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/acoustid/go-acoustid/util"
 	"fmt"
+	"bufio"
 )
 
 func readBlockIndex(name string) ([]uint32, error) {
@@ -44,6 +45,8 @@ func readData(name string, blockSize int, blockIndex []uint32) error {
 	defer file.Close()
 
 	buf := make([]byte, blockSize)
+
+	output := bufio.NewWriter(os.Stdout)
 
 	for _, term := range blockIndex {
 		_, err := io.ReadFull(file, buf)
@@ -78,9 +81,18 @@ func readData(name string, blockSize int, blockIndex []uint32) error {
 			docID += delta
 			ptr += n
 
-			fmt.Printf("%d %d\n", term>>4, docID)
+			_, err := fmt.Fprintf(output, "%d %d\n", term>>4, docID)
+			if err != nil {
+				return errors.New("error while writing output")
+			}
 		}
 	}
+
+	err = output.Flush()
+	if err != nil {
+		return errors.New("error while writing output")
+	}
+
 	return nil
 }
 

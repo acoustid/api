@@ -114,7 +114,7 @@ func (m *Manifest) Load(fs vfs.FileSystem, create bool) error {
 	if err != nil {
 		if vfs.IsNotExist(err) && create {
 			m.Reset()
-			m.ID = 1
+			m.ID = 0
 			return m.Save(fs)
 		}
 		return errors.Wrap(err, "open failed")
@@ -231,12 +231,13 @@ func (m *Manifest) Commit(fs vfs.FileSystem, id uint32, base *Manifest) error {
 		}
 	}
 
+	m.ID = id
 	err := m.Save(fs)
 	if err != nil {
+		m.ID = 0
 		return errors.Wrap(err, "save failed")
 	}
 
-	m.ID = id
 	m.addedSegments = nil
 	m.removedSegments = nil
 	return nil
