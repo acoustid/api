@@ -8,6 +8,7 @@ import (
 	"github.com/acoustid/go-acoustid/util"
 	"io"
 	"math"
+	"go4.org/sort"
 )
 
 const (
@@ -228,12 +229,17 @@ func (s *SparseBitSet) Write(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	for i, block := range s.blocks {
+	keys := make([]uint32, 0, len(s.blocks))
+	for i := range s.blocks {
+		keys = append(keys, i)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	for _, i := range keys {
 		err = binary.Write(w, binary.LittleEndian, i)
 		if err != nil {
 			return err
 		}
-		err = binary.Write(w, binary.LittleEndian, block)
+		err = binary.Write(w, binary.LittleEndian, s.blocks[i])
 		if err != nil {
 			return err
 		}

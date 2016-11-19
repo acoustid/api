@@ -211,19 +211,17 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 	if termBits <= 8 {
 		flags |= Fixed8BitTerms
 		for i, it := range input {
+			buf1[ptr1] = byte(it.Term - lastTerm)
 			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
-			if BlockHeaderSize+i+ptr2+n2 >= s.Meta.BlockSize {
+			if BlockHeaderSize+ptr1+ptr2+1+n2 >= s.Meta.BlockSize {
 				n = i
 				break
 			}
+			ptr1++
 			ptr2 += n2
+			lastTerm = it.Term
 			s.Meta.Checksum += it.Term + it.DocID
 			s.docs.Add(it.DocID)
-		}
-		for _, it := range input[:n] {
-			buf1[ptr1] = byte(it.Term - lastTerm)
-			ptr1++
-			lastTerm = it.Term
 		}
 	} else {
 		for i, it := range input {
@@ -242,15 +240,15 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 	}
 
 	if s.Meta.NumBlocks > 0 {
-		if s.Meta.MinTerm > input[0].Term {
-			s.Meta.MinTerm = input[0].Term
+		if s.Meta.MinTerm > baseTerm {
+			s.Meta.MinTerm = baseTerm
 		}
-		if s.Meta.MaxTerm < input[n-1].Term {
-			s.Meta.MaxTerm = input[n-1].Term
+		if s.Meta.MaxTerm < lastTerm {
+			s.Meta.MaxTerm = lastTerm
 		}
 	} else {
-		s.Meta.MinTerm = input[0].Term
-		s.Meta.MaxTerm = input[n-1].Term
+		s.Meta.MinTerm = baseTerm
+		s.Meta.MaxTerm = lastTerm
 	}
 
 	s.Meta.NumItems += n
@@ -348,7 +346,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		return errors.Wrap(err, "docID set write failed")
 	}
 
-	err = writer.WriteByte(byte(0))
+	_, err = writer.Write([]byte{0, '\n'})
 	if err != nil {
 		return err
 	}
