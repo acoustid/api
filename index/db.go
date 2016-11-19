@@ -147,10 +147,10 @@ func (db *DB) commit(manifest *Manifest) error {
 		return ErrAlreadyClosed
 	}
 
-	base := db.manifest.Load().(*Manifest)
 	id := atomic.AddUint32(&db.txid, 1)
+	base := db.manifest.Load().(*Manifest)
 
-	err := manifest.Commit(db.fs, base, id)
+	err := manifest.Commit(db.fs, id, base)
 	if err != nil {
 		return errors.Wrap(err, "manifest commit failed")
 	}

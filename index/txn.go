@@ -71,13 +71,7 @@ func (txn *Transaction) Delete(docID uint32) error {
 		log.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
-	txn.manifest.NumDeletedDocs = 0
-	for _, segment := range txn.manifest.Segments {
-		if segment.Delete(docID) {
-			log.Printf("deleted doc %v from segment %v", docID, segment.ID)
-		}
-		txn.manifest.NumDeletedDocs += segment.NumDeletedDocs()
-	}
+	txn.manifest.Delete(docID)
 
 	return nil
 }
@@ -88,7 +82,7 @@ func (txn *Transaction) DeleteAll() error {
 	}
 
 	txn.buffer.Reset()
-	txn.manifest.Reset()
+	txn.manifest.DeleteAll()
 
 	log.Print("removed all segments")
 	return nil

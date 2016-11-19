@@ -218,3 +218,238 @@ func TestDB_Compact(t *testing.T) {
 	require.NoError(t, db.Compact(), "compact failed")
 	require.Equal(t, 1, db.NumSegments(), "db should be compacted to one segment")
 }
+
+func assertNoHits(t *testing.T, db *DB, query []uint32) {
+	hits, err := db.Search(query)
+	if assert.NoError(t, err) {
+		assert.Empty(t, hits)
+	}
+}
+
+func assertHitsEqual(t *testing.T, db *DB, query []uint32, expected map[uint32]int) {
+	hits, err := db.Search(query)
+	if assert.NoError(t, err) {
+		assert.Equal(t, expected, hits)
+	}
+}
+
+func TestDB_Commit_ConcurrentInserts(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Add(1, []uint32{2})
+
+	require.NoError(t, tx1.Commit())
+	require.NoError(t, tx2.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertHitsEqual(t, db, []uint32{2}, map[uint32]int{1: 1})
+}
+
+func TestDB_Commit_ConcurrentUpdates(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Add(1, []uint32{2})
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Add(1, []uint32{3})
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertNoHits(t, db, []uint32{2})
+	assertHitsEqual(t, db, []uint32{3}, map[uint32]int{1: 1})
+}
+
+func TestDB_Commit_ConcurrentDeletes(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Delete(1)
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Delete(1)
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+}
+
+func TestDB_Commit_ConcurrentDeletesMerge(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	tx1.Add(2, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Delete(1)
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Delete(2)
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+}
+
+func TestDB_Commit_ConcurrentUpdateAndDelete(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Add(1, []uint32{2})
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Delete(1)
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertNoHits(t, db, []uint32{2})
+	assertNoHits(t, db, []uint32{3})
+}
+
+func TestDB_Commit_ConcurrentDeleteAndUpdate(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Delete(1)
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Add(1, []uint32{3})
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertNoHits(t, db, []uint32{2})
+	assertHitsEqual(t, db, []uint32{3}, map[uint32]int{1: 1})
+}
+
+func TestDB_Commit_ConcurrentDeleteAll(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.DeleteAll()
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.DeleteAll()
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+}
+
+func TestDB_Commit_ConcurrentDeleteAllAndUpdate(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.DeleteAll()
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.Add(1, []uint32{3})
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertHitsEqual(t, db, []uint32{3}, map[uint32]int{1: 1})
+}
+
+func TestDB_Commit_ConcurrentUpdateAndDeleteAll(t *testing.T) {
+	db, err := Open(vfs.CreateMemDir(), true)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx1, err := db.Transaction()
+	require.NoError(t, err)
+	tx1.Add(1, []uint32{1})
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := db.Transaction()
+	require.NoError(t, err)
+	tx2.Add(1, []uint32{2})
+
+	tx3, err := db.Transaction()
+	require.NoError(t, err)
+	tx3.DeleteAll()
+
+	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx3.Commit())
+
+	assertNoHits(t, db, []uint32{1})
+	assertNoHits(t, db, []uint32{2})
+}
