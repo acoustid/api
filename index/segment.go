@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"io"
 	"log"
-	"math"
 	"sort"
 	"time"
 )
