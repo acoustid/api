@@ -4,8 +4,8 @@
 package intset
 
 import (
-	"testing"
 	"math/rand"
+	"testing"
 )
 
 func BenchmarkFixedBitSet_Contains(b *testing.B) {

@@ -173,11 +173,11 @@ func (s *SparseBitSet) Max() uint32 {
 			}
 		}
 		block := s.blocks[mi]
-		for j := blockWords-1; j >= 0; j-- {
+		for j := blockWords - 1; j >= 0; j-- {
 			if block[j] == 0 {
 				continue
 			}
-			for k := wordBits-1; k >= 0; k-- {
+			for k := wordBits - 1; k >= 0; k-- {
 				mask := uint64(1) << uint(k)
 				if block[j]&mask != 0 {
 					return mi*blockBits + uint32(j)*wordBits + uint32(k)

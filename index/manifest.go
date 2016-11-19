@@ -23,7 +23,7 @@ type Manifest struct {
 	Segments        map[uint32]*Segment `json:"segments"`
 	addedSegments   map[uint32]struct{}
 	removedSegments map[uint32]struct{}
-	deleteAll bool
+	deleteAll       bool
 }
 
 func NewManifest() *Manifest {

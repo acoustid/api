@@ -4,9 +4,9 @@
 package index
 
 import (
-	"testing"
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func newTestSegment(t *testing.T, fs vfs.FileSystem, id uint32, docID uint32, terms []uint32) *Segment {

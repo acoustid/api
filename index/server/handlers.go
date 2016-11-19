@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"github.com/acoustid/go-acoustid/index"
 	"github.com/gorilla/mux"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
-	"io"
 )
 
 type DeleteHandler struct {

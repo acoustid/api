@@ -4,13 +4,13 @@
 package server
 
 import (
-	"testing"
-	"github.com/stretchr/testify/require"
+	"bytes"
 	"github.com/acoustid/go-acoustid/index"
 	"github.com/acoustid/go-acoustid/util/vfs"
-	"net/http/httptest"
+	"github.com/stretchr/testify/require"
 	"log"
-	"bytes"
+	"net/http/httptest"
+	"testing"
 )
 
 func TestDeleteHandler(t *testing.T) {

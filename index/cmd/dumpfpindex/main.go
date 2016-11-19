@@ -4,15 +4,15 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"flag"
+	"fmt"
+	"github.com/acoustid/go-acoustid/util"
+	"github.com/pkg/errors"
 	"io"
 	"log"
 	"os"
-	"github.com/pkg/errors"
-	"github.com/acoustid/go-acoustid/util"
-	"fmt"
-	"bufio"
 )
 
 func readBlockIndex(name string) ([]uint32, error) {
@@ -98,9 +98,9 @@ func readData(name string, blockSize int, blockIndex []uint32) error {
 
 func main() {
 	var (
-		dataFilename = flag.String("d", "", "segment data file to dump")
+		dataFilename  = flag.String("d", "", "segment data file to dump")
 		indexFilename = flag.String("i", "", "segment index file to dump")
-		blockSize = flag.Int("b", 512, "block size")
+		blockSize     = flag.Int("b", 512, "block size")
 	)
 
 	flag.Parse()

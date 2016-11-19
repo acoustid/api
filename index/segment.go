@@ -21,6 +21,7 @@ import (
 const (
 	DefaultBlockSize = 1024
 	BlockHeaderSize  = 8
+	Fixed8BitTerms   = 1 << 15
 )
 
 var (
@@ -186,25 +187,58 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 	ptr1, ptr2 := 0, 0
 
 	baseDocID := input[0].DocID
+	baseTerm := input[0].Term
+	lastTerm := baseTerm
+	var maxTermDiff uint32
 	for _, val := range input {
 		if baseDocID > val.DocID {
 			baseDocID = val.DocID
 		}
+		termDiff := val.Term - lastTerm
+		if termDiff > maxTermDiff {
+			maxTermDiff = termDiff
+		}
+		lastTerm = val.Term
+	}
+	lastTerm = baseTerm
+
+	var termBits int
+	if maxTermDiff > 0 {
+		termBits = 1 + util.HighestSetBit32(maxTermDiff)
 	}
 
-	var lastTerm uint32
-	for i, it := range input {
-		n1 := util.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
-		n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
-		if BlockHeaderSize+ptr1+ptr2+n1+n2 >= s.Meta.BlockSize {
-			n = i
-			break
+	var flags uint16
+	if termBits <= 8 {
+		flags |= Fixed8BitTerms
+		for i, it := range input {
+			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
+			if BlockHeaderSize+i+ptr2+n2 >= s.Meta.BlockSize {
+				n = i
+				break
+			}
+			ptr2 += n2
+			s.Meta.Checksum += it.Term + it.DocID
+			s.docs.Add(it.DocID)
 		}
-		ptr1 += n1
-		ptr2 += n2
-		lastTerm = it.Term
-		s.Meta.Checksum += it.Term + it.DocID
-		s.docs.Add(it.DocID)
+		for _, it := range input[:n] {
+			buf1[ptr1] = byte(it.Term - lastTerm)
+			ptr1++
+			lastTerm = it.Term
+		}
+	} else {
+		for i, it := range input {
+			n1 := util.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
+			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
+			if BlockHeaderSize+ptr1+ptr2+n1+n2 >= s.Meta.BlockSize {
+				n = i
+				break
+			}
+			ptr1 += n1
+			ptr2 += n2
+			lastTerm = it.Term
+			s.Meta.Checksum += it.Term + it.DocID
+			s.docs.Add(it.DocID)
+		}
 	}
 
 	if s.Meta.NumBlocks > 0 {
@@ -221,10 +255,10 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err err
 
 	s.Meta.NumItems += n
 	s.Meta.NumBlocks += 1
-	s.blockIndex = append(s.blockIndex, input[0].Term)
+	s.blockIndex = append(s.blockIndex, baseTerm)
 
 	var header [BlockHeaderSize]byte
-	binary.LittleEndian.PutUint16(header[0:], uint16(n))
+	binary.LittleEndian.PutUint16(header[0:], uint16(n)&0x0fff|flags&0xf000)
 	binary.LittleEndian.PutUint16(header[2:], uint16(ptr1))
 	binary.LittleEndian.PutUint32(header[4:], baseDocID)
 
@@ -388,20 +422,29 @@ func (s *Segment) ReadBlock(i int) ([]Item, error) {
 		return nil, ErrInvalidBlockHeader
 	}
 
-	n := int(binary.LittleEndian.Uint16(data))
+	flags := binary.LittleEndian.Uint16(data)
+	n := int(flags & 0x0fff)
 	values := make([]Item, n)
 
 	ptr := BlockHeaderSize
 
-	var term uint32
-	for i := range values {
-		delta, nn := util.Uvarint32(data[ptr:])
-		if nn <= 0 {
-			return nil, ErrInvalidBlockData
+	term := s.blockIndex[i]
+	if flags&Fixed8BitTerms != 0 {
+		for i := range values {
+			term += uint32(data[ptr])
+			values[i].Term = term
+			ptr++
 		}
-		term += delta
-		values[i].Term = term
-		ptr += nn
+	} else {
+		for i := range values {
+			delta, nn := util.Uvarint32(data[ptr:])
+			if nn <= 0 {
+				return nil, ErrInvalidBlockData
+			}
+			term += delta
+			values[i].Term = term
+			ptr += nn
+		}
 	}
 
 	baseDocID := binary.LittleEndian.Uint32(data[4:])
