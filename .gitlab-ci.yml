@@ -2,7 +2,7 @@ image: golang:latest
 
 before_script:
   - mkdir -p /go/src/github.com/acoustid
-  - ln -s `pwd` /go/src/github.com/acoustid/go-acoustid
+  - ln -s $CI_PROJECT_DIR /go/src/github.com/acoustid/go-acoustid
   - cd /go/src/github.com/acoustid/go-acoustid/
 
 test:
