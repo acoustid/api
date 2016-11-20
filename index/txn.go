@@ -5,18 +5,26 @@ package index
 
 import (
 	"github.com/pkg/errors"
+	"go4.org/syncutil"
 	"log"
 )
 
 type Transaction struct {
-	*Snapshot
-	db     *DB
-	buffer ItemBuffer
+	snapshot *Snapshot
+	manifest *Manifest
+	db       *DB
+	buffer   ItemBuffer
+	close    syncutil.Once
+	closeFn  func(tx *Transaction) error
 }
 
 const MaxBufferedItems = 1024 * 1024
 
 var ErrCommitted = errors.New("transaction is already committed")
+
+func (tx *Transaction) init() {
+	tx.manifest = tx.snapshot.manifest.Clone()
+}
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	if txn.Committed() {
@@ -126,6 +134,10 @@ func (txn *Transaction) compact() error {
 		return errors.Wrap(err, "flush failed")
 	}
 
+	if len(txn.manifest.Segments) == 0 {
+		return nil
+	}
+
 	mp := NewTieredMergePolicy()
 	merges := mp.FindMerges(txn.manifest.Segments, 0)
 
@@ -145,5 +157,17 @@ func (txn *Transaction) compact() error {
 		break
 	}
 
+	return nil
+}
+
+func (tx *Transaction) Close() error {
+	err1 := tx.close.Do(func() error { return tx.closeFn(tx) })
+	err2 := tx.snapshot.Close()
+	if err1 != nil {
+		return err1
+	}
+	if err2 != nil {
+		return err2
+	}
 	return nil
 }

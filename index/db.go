@@ -6,21 +6,33 @@ package index
 import (
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
+	"gopkg.in/tomb.v2"
 	"io"
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+var debugLog = log.New(os.Stderr, "", log.LstdFlags)
+
+//var debugLog = log.New(ioutil.Discard, "DEBUG", log.LstdFlags)
 
 var ErrAlreadyClosed = errors.New("already closed")
 
 type DB struct {
-	fs       vfs.FileSystem
-	mu       sync.Mutex
-	wlock    io.Closer
-	txid     uint32
-	manifest atomic.Value
-	closed   bool
+	fs              vfs.FileSystem
+	mu              sync.RWMutex
+	wlock           io.Closer
+	txid            uint32
+	manifest        atomic.Value
+	closed          bool
+	numSnapshots    int64
+	numTransactions int64
+	refs            map[string]int
+	orphanedFiles   chan string
+	t               tomb.Tomb
 }
 
 func Open(fs vfs.FileSystem, create bool) (*DB, error) {
@@ -37,14 +49,54 @@ func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 		}
 	}
 
-	db := &DB{fs: fs, txid: manifest.ID}
-	db.manifest.Store(&manifest)
+	db := &DB{fs: fs}
+	db.init(&manifest)
 	return db, nil
+}
+
+func (db *DB) init(manifest *Manifest) {
+	db.txid = manifest.ID
+	db.manifest.Store(manifest)
+
+	db.refs = make(map[string]int)
+	db.incFileRefs(manifest)
+
+	db.orphanedFiles = make(chan string, 10)
+	db.t.Go(db.doAsyncCleanups)
+}
+
+func (db *DB) doAsyncCleanups() error {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case name := <-db.orphanedFiles:
+			err := db.fs.Remove(name)
+			if err != nil {
+				log.Printf("[ERROR] failed to delete file %q: %v", name, err)
+			} else {
+				debugLog.Printf("deleted file %q", name)
+			}
+		case <-ticker.C:
+			err := db.Compact()
+			if err != nil {
+				log.Printf("[ERROR] compaction failed: %v", err)
+			}
+		case <-db.t.Dying():
+			return nil
+		}
+	}
 }
 
 func (db *DB) Close() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	db.t.Kill(nil)
+	err := db.t.Wait()
+	if err != nil {
+		log.Printf("[ERROR] failed to stop background cleanup job: %v", err)
+	}
 
 	if db.wlock != nil {
 		db.wlock.Close()
@@ -53,6 +105,28 @@ func (db *DB) Close() {
 	}
 
 	db.closed = true
+}
+
+// Note: This must be called under a locked mutex.
+func (db *DB) incFileRefs(m *Manifest) {
+	for _, segment := range m.Segments {
+		for _, name := range segment.fileNames() {
+			db.refs[name]++
+		}
+	}
+}
+
+// Note: This must be called under a locked mutex.
+func (db *DB) decFileRefs(m *Manifest) {
+	for _, segment := range m.Segments {
+		for _, name := range segment.fileNames() {
+			db.refs[name]--
+			if db.refs[name] <= 0 {
+				log.Printf("file %q is no longer needed, deleting", name)
+				db.orphanedFiles <- name
+			}
+		}
+	}
 }
 
 func (db *DB) Add(docID uint32, hashes []uint32) error {
@@ -76,18 +150,30 @@ func (db *DB) Compact() error {
 }
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
-	snapshot := db.newSnapshot(false)
+	snapshot := db.newSnapshot()
 	defer snapshot.Close()
 	return snapshot.Search(query)
 }
 
 // Snapshot creates a consistent read-only view of the DB.
 func (db *DB) Snapshot() Searcher {
-	return db.newSnapshot(false)
+	return db.newSnapshot()
+}
+
+func (db *DB) closeTransaction(tx *Transaction) error {
+	numTransactions := atomic.AddInt64(&db.numTransactions, -1)
+	if numTransactions == 0 {
+		debugLog.Printf("closed transaction %p", tx)
+	} else {
+		debugLog.Printf("closed transaction %p, %v transactions still open", tx, numTransactions)
+	}
+	return nil
 }
 
 // Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
 func (db *DB) Transaction() (BulkWriter, error) {
+	snapshot := db.newSnapshot()
+
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -104,10 +190,14 @@ func (db *DB) Transaction() (BulkWriter, error) {
 		db.wlock = lock
 	}
 
-	txn := &Transaction{Snapshot: db.newSnapshot(true), db: db}
-	log.Println("started new transaction")
+	tx := &Transaction{snapshot: snapshot, db: db, closeFn: db.closeTransaction}
+	tx.init()
 
-	return txn, nil
+	atomic.AddInt64(&db.numTransactions, 1)
+
+	debugLog.Printf("created transaction %p (base=%v)", tx, tx.snapshot.manifest.ID)
+
+	return tx, nil
 }
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
@@ -127,12 +217,37 @@ func (db *DB) RunInTransaction(fn func(txn BulkWriter) error) error {
 	return txn.Commit()
 }
 
-func (db *DB) newSnapshot(write bool) *Snapshot {
-	manifest := db.manifest.Load().(*Manifest)
-	if write {
-		manifest = manifest.Clone()
+func (db *DB) closeSnapshot(snapshot *Snapshot) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	db.decFileRefs(snapshot.manifest)
+
+	numSnapshots := atomic.AddInt64(&db.numSnapshots, -1)
+	if numSnapshots == 0 {
+		debugLog.Printf("closed snapshot %p (%v)", snapshot, snapshot.manifest.ID)
+	} else {
+		debugLog.Printf("closed snapshot %p (%v), %v snapshots still open", snapshot, snapshot.manifest.ID, numSnapshots)
 	}
-	return &Snapshot{manifest: manifest}
+
+	return nil
+}
+
+func (db *DB) newSnapshot() *Snapshot {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	snapshot := &Snapshot{
+		manifest: db.manifest.Load().(*Manifest),
+		closeFn:  db.closeSnapshot,
+	}
+
+	db.incFileRefs(snapshot.manifest)
+	atomic.AddInt64(&db.numSnapshots, 1)
+
+	debugLog.Printf("created snapshot %p (id=%v)", snapshot, snapshot.manifest.ID)
+
+	return snapshot
 }
 
 func (db *DB) createSegment(input ItemReader) (*Segment, error) {
@@ -147,6 +262,10 @@ func (db *DB) commit(manifest *Manifest) error {
 		return ErrAlreadyClosed
 	}
 
+	if !manifest.HasChanges() {
+		return nil
+	}
+
 	id := atomic.AddUint32(&db.txid, 1)
 	base := db.manifest.Load().(*Manifest)
 
@@ -154,6 +273,9 @@ func (db *DB) commit(manifest *Manifest) error {
 	if err != nil {
 		return errors.Wrap(err, "manifest commit failed")
 	}
+
+	db.incFileRefs(manifest)
+	db.decFileRefs(base)
 
 	db.manifest.Store(manifest)
 

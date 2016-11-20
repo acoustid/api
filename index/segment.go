@@ -164,6 +164,14 @@ func (s *Segment) updateFileName(updateID uint32) string {
 	return fmt.Sprintf("segment-%x-%x.del", s.ID, updateID)
 }
 
+func (s *Segment) fileNames() []string {
+	names := []string{s.fileName()}
+	if s.UpdateID != 0 {
+		names = append(names, s.updateFileName(s.UpdateID))
+	}
+	return names
+}
+
 // Remove deletes all files associated with the segment
 func (s *Segment) Remove(fs vfs.FileSystem) error {
 	name := s.fileName()

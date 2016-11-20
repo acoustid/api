@@ -65,6 +65,12 @@
 			"revisionTime": "2016-09-23T17:06:11Z"
 		},
 		{
+			"checksumSHA1": "Cf03HhSVuBk9A+zKsemGm2ziqaw=",
+			"path": "go4.org/syncutil",
+			"revision": "399a9d7bfe85437346a5ec4ef0450fc2f1084e61",
+			"revisionTime": "2016-09-23T17:06:11Z"
+		},
+		{
 			"checksumSHA1": "aVgPDgwY3/t4J/JOw9H3FVMHqh0=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "c200b10b5d5e122be351b67af224adc6128af5bf",
@@ -99,6 +105,12 @@
 			"path": "gopkg.in/mgo.v2/internal/scram",
 			"revision": "3f83fa5005286a7fe593b055f0d7771a7dce4655",
 			"revisionTime": "2016-08-18T02:01:20Z"
+		},
+		{
+			"checksumSHA1": "WiyCOMvfzRdymImAJ3ME6aoYUdM=",
+			"path": "gopkg.in/tomb.v2",
+			"revision": "14b3d72120e8d10ea6e6b7f87f7175734b1faab8",
+			"revisionTime": "2014-06-26T14:46:23Z"
 		}
 	],
 	"rootPath": "github.com/acoustid/go-acoustid"

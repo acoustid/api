@@ -6,10 +6,13 @@ package index
 import (
 	"github.com/pkg/errors"
 	"go4.org/sort"
+	"go4.org/syncutil"
 )
 
 type Snapshot struct {
 	manifest *Manifest
+	close    syncutil.Once
+	closeFn  func(s *Snapshot) error
 }
 
 func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
@@ -46,5 +49,5 @@ func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
 }
 
 func (s *Snapshot) Close() error {
-	return nil
+	return s.close.Do(func() error { return s.closeFn(s) })
 }

@@ -243,6 +243,18 @@ func (m *Manifest) Commit(fs vfs.FileSystem, id uint32, base *Manifest) error {
 	return nil
 }
 
+func (m *Manifest) HasChanges() bool {
+	if len(m.addedSegments) > 0 || len(m.removedSegments) > 0 {
+		return true
+	}
+	for _, segment := range m.Segments {
+		if segment.dirty {
+			return true
+		}
+	}
+	return false
+}
+
 var errConflict = errors.New("conflicting manifests")
 
 // IsConflict returns true if err was caused by a conflict.
