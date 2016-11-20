@@ -8,10 +8,10 @@ import (
 	"github.com/pkg/errors"
 	"go4.org/syncutil"
 	"io"
+	"io/ioutil"
 	"log"
 	"sync"
 	"sync/atomic"
-	"io/ioutil"
 )
 
 var debugLog = log.New(ioutil.Discard, "", log.LstdFlags)
@@ -290,4 +290,15 @@ func (db *DB) NumDocs() int {
 func (db *DB) NumDeletedDocs() int {
 	manifest := db.manifest.Load().(*Manifest)
 	return manifest.NumDeletedDocs
+}
+
+// Contains returns true if the DB contains the given docID.
+func (db *DB) Contains(docID uint32) bool {
+	manifest := db.manifest.Load().(*Manifest)
+	for _, segment := range manifest.Segments {
+		if segment.Contains(docID) {
+			return true
+		}
+	}
+	return false
 }

@@ -465,7 +465,11 @@ func (s *Segment) ReadBlock(i int) ([]Item, error) {
 	return values, nil
 }
 
+// Contains returns true if the segment contains the given docID.
 func (s *Segment) Contains(docID uint32) bool {
+	if docID < s.Meta.MinDocID || docID > s.Meta.MaxDocID {
+		return false
+	}
 	if !s.docs.Contains(docID) {
 		return false
 	}
