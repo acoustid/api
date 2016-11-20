@@ -20,6 +20,8 @@ type memFS struct {
 	files map[string]*memFile
 }
 
+// CreateMemDir creates a FileSystem instance that only exists in memory.
+// It does not use any OS-level file functions. It's useful for unit tests.
 func CreateMemDir() FileSystem {
 	return &memFS{
 		files: make(map[string]*memFile),
@@ -42,7 +44,7 @@ func (fs *memFS) Lock(name string) (io.Closer, error) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	if _, exists := fs.files[name]; exists {
-		return nil, ErrLocked
+		return nil, errLocked
 	}
 	fs.files[name] = &memFile{}
 	return &memLock{fs: fs, name: name}, nil
@@ -172,7 +174,8 @@ type memAtomicOutputFile struct {
 
 func (f *memAtomicOutputFile) Commit() error {
 	err := f.onCommit()
-	f.onCommit = func() error { return ErrAlreadyCommitted }
+	f.onCommit = func() error { return errCommitted
+	}
 	return err
 }
 

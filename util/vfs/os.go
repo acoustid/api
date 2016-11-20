@@ -20,7 +20,7 @@ type osFS struct {
 	tmp  bool
 }
 
-// OpenDir opens a FS restricted to a particular directory.
+// OpenDir creates a FileSystem restricted to a particular directory.
 // If the directory does not exist and the create parameter is true, it will be created.
 func OpenDir(dir string, create bool) (FileSystem, error) {
 	info, err := os.Stat(dir)
@@ -43,7 +43,7 @@ func OpenDir(dir string, create bool) (FileSystem, error) {
 	return &osFS{root: dir}, nil
 }
 
-// CreateTempDir creates a temporary directory and opens a FileSystem instance in it.
+// CreateTempDir creates a temporary directory on disk and opens a FileSystem instance in it.
 // The directory will be deleted after calling Close.
 func CreateTempDir() (FileSystem, error) {
 	dir, err := ioutil.TempDir("", "tmpdir")
@@ -76,7 +76,7 @@ func (fs *osFS) Lock(name string) (io.Closer, error) {
 	closer, err := lock.Lock(fs.Prefix(name))
 	if err != nil {
 		if strings.Contains(err.Error(), "already locked") {
-			err = ErrLocked
+			err = errLocked
 		}
 		err = &os.PathError{Op: "lock", Path: name, Err: err}
 	}

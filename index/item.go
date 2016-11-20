@@ -21,6 +21,7 @@ type ItemReader interface {
 	ReadBlock() (items []Item, err error)
 }
 
+// ReadAllItems reads all items from reader into a slice.
 func ReadAllItems(reader ItemReader) ([]Item, error) {
 	var items []Item
 	for {

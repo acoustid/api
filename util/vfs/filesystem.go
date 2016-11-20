@@ -10,11 +10,6 @@ import (
 	"os"
 )
 
-var (
-	ErrLocked           = errors.New("already locked")
-	ErrAlreadyCommitted = errors.New("already committed")
-)
-
 type InputFile interface {
 	io.Reader
 	io.ReaderAt
@@ -33,7 +28,7 @@ type AtomicOutputFile interface {
 	Commit() error
 }
 
-// FileSystem
+// FileSystem is an abstraction of a single directory of files.
 type FileSystem interface {
 
 	// Lock acquires an exclusive lock on a file and returns a Closer
@@ -67,14 +62,22 @@ type FileSystem interface {
 	Remove(name string) error
 }
 
+var (
+	errLocked = errors.New("already locked")
+	errCommitted = errors.New("already committed")
+)
+
+// IsNotExist returns true if err was caused by a file not existing.
 func IsNotExist(err error) bool {
 	return os.IsNotExist(err)
 }
 
+// IsExist returns true if err was caused by a file not existing.
 func IsExist(err error) bool {
 	return os.IsExist(err)
 }
 
+// IsLocked returns true if err was caused by a file being already locked.
 func IsLocked(err error) bool {
-	return errors.Cause(err) == ErrLocked
+	return errors.Cause(err) == errLocked
 }

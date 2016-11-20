@@ -8,6 +8,8 @@ import (
 	"io"
 )
 
+// WriteFile atomically writes the result of the write function to a file.
+// If the write function returns a non-nil error, the file is not saved.
 func WriteFile(fs FileSystem, name string, write func(w io.Writer) error) error {
 	file, err := fs.CreateAtomicFile(name)
 	if err != nil {
