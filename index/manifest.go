@@ -244,7 +244,7 @@ func (m *Manifest) Commit(fs vfs.FileSystem, id uint32, base *Manifest) error {
 }
 
 func (m *Manifest) HasChanges() bool {
-	if len(m.addedSegments) > 0 || len(m.removedSegments) > 0 {
+	if len(m.addedSegments) > 0 || len(m.removedSegments) > 0 || m.deleteAll {
 		return true
 	}
 	for _, segment := range m.Segments {
