@@ -6,18 +6,15 @@ package index
 import (
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
-	"gopkg.in/tomb.v2"
+	"go4.org/syncutil"
 	"io"
 	"log"
-	"os"
 	"sync"
 	"sync/atomic"
-	"time"
+	"io/ioutil"
 )
 
-var debugLog = log.New(os.Stderr, "", log.LstdFlags)
-
-//var debugLog = log.New(ioutil.Discard, "DEBUG", log.LstdFlags)
+var debugLog = log.New(ioutil.Discard, "", log.LstdFlags)
 
 var ErrAlreadyClosed = errors.New("already closed")
 
@@ -32,7 +29,7 @@ type DB struct {
 	numTransactions int64
 	refs            map[string]int
 	orphanedFiles   chan string
-	t               tomb.Tomb
+	bg              syncutil.Group
 }
 
 func Open(fs vfs.FileSystem, create bool) (*DB, error) {
@@ -61,42 +58,28 @@ func (db *DB) init(manifest *Manifest) {
 	db.refs = make(map[string]int)
 	db.incFileRefs(manifest)
 
-	db.orphanedFiles = make(chan string, 10)
-	db.t.Go(db.doAsyncCleanups)
+	db.orphanedFiles = make(chan string, 16)
+	db.bg.Go(db.deleteOrphanedFiles)
 }
 
-func (db *DB) doAsyncCleanups() error {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case name := <-db.orphanedFiles:
-			err := db.fs.Remove(name)
-			if err != nil {
-				log.Printf("[ERROR] failed to delete file %q: %v", name, err)
-			} else {
-				debugLog.Printf("deleted file %q", name)
-			}
-		case <-ticker.C:
-			err := db.Compact()
-			if err != nil {
-				log.Printf("[ERROR] compaction failed: %v", err)
-			}
-		case <-db.t.Dying():
-			return nil
+func (db *DB) deleteOrphanedFiles() error {
+	for name := range db.orphanedFiles {
+		err := db.fs.Remove(name)
+		if err != nil {
+			log.Printf("[ERROR] failed to delete file %q: %v", name, err)
+		} else {
+			debugLog.Printf("deleted file %q", name)
 		}
 	}
+	return nil
 }
 
 func (db *DB) Close() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	db.t.Kill(nil)
-	err := db.t.Wait()
-	if err != nil {
-		log.Printf("[ERROR] failed to stop background cleanup job: %v", err)
-	}
+	close(db.orphanedFiles)
+	db.bg.Wait()
 
 	if db.wlock != nil {
 		db.wlock.Close()
@@ -122,7 +105,7 @@ func (db *DB) decFileRefs(m *Manifest) {
 		for _, name := range segment.fileNames() {
 			db.refs[name]--
 			if db.refs[name] <= 0 {
-				log.Printf("file %q is no longer needed, deleting", name)
+				log.Printf("file %q is no longer needed", name)
 				db.orphanedFiles <- name
 			}
 		}

@@ -157,11 +157,11 @@ func (s *Segment) Open(fs vfs.FileSystem) error {
 }
 
 func (s *Segment) fileName() string {
-	return fmt.Sprintf("segment-%x.dat", s.ID)
+	return fmt.Sprintf("segment-%d.dat", s.ID)
 }
 
 func (s *Segment) updateFileName(updateID uint32) string {
-	return fmt.Sprintf("segment-%x-%x.del", s.ID, updateID)
+	return fmt.Sprintf("segment-%d-%d.del", s.ID, updateID)
 }
 
 func (s *Segment) fileNames() []string {
