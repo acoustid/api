@@ -121,6 +121,14 @@ func (mp *TieredMergePolicy) findBestMerge(segments []*Segment, maxSize int) (be
 	return
 }
 
+func (mp *TieredMergePolicy) FindBestMerge(origSegments map[uint32]*Segment, maxSize int) *Merge {
+	merges := mp.FindMerges(origSegments, maxSize)
+	if len(merges) == 0 {
+		return nil
+	}
+	return merges[0]
+}
+
 func (mp *TieredMergePolicy) FindMerges(origSegments map[uint32]*Segment, maxSize int) (merges []*Merge) {
 	if maxSize == 0 {
 		maxSize = mp.MaxMergedSegmentSize

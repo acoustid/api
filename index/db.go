@@ -12,6 +12,9 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"fmt"
+	"strings"
+	"github.com/acoustid/go-acoustid/util/intset"
 )
 
 var debugLog = log.New(ioutil.Discard, "", log.LstdFlags)
@@ -129,8 +132,103 @@ func (db *DB) Import(stream ItemReader) error {
 }
 
 func (db *DB) Compact() error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.(*Transaction).compact() })
+	snapshot := db.newSnapshot()
+	defer snapshot.Close()
+
+	mp := NewTieredMergePolicy()
+	merge := mp.FindBestMerge(snapshot.manifest.Segments, 0)
+
+	if merge == nil {
+		debugLog.Print("no compaction required")
+		return nil
+	}
+
+	var ids []string
+	var readers []ItemReader
+	for _, segment := range merge.Segments {
+		ids = append(ids, fmt.Sprintf("%v", segment.ID))
+		readers = append(readers, segment.Reader())
+	}
+
+	log.Printf("merging segments %v", strings.Join(ids, ", "))
+	newSegment, err := db.createSegment(MergeItemReaders(readers...))
+	if err != nil {
+		return errors.Wrap(err, "segment merge failed")
+	}
+
+	err = db.commit(func(base *Manifest) (*Manifest, error) {
+		manifest := base.Clone()
+		if base.ID == snapshot.manifest.ID {
+			for _, segment := range merge.Segments {
+				delete(manifest.Segments, segment.ID)
+			}
+			manifest.Segments[newSegment.ID] = newSegment
+		} else {
+			for _, segment := range merge.Segments {
+				manifest.RemoveSegment(segment)
+			}
+			deletedDocs := intset.NewSparseBitSet(0)
+			for _, oldSegment := range merge.Segments {
+				segment, exists := manifest.Segments[oldSegment.ID]
+				if !exists {
+					return nil, errors.Wrapf(errConflict, "segment %v no longer exists", oldSegment.ID)
+				}
+				if segment.UpdateID != oldSegment.UpdateID {
+					deletedDocs.Union(segment.deletedDocs)
+				}
+			}
+			newSegment.DeleteMulti(deletedDocs)
+			manifest.addSegment(newSegment, false)
+		}
+		return manifest, nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "commit failed")
+	}
+
+	return nil
 }
+
+func (db *DB) commit(prepareCommit func(base *Manifest) (*Manifest, error)) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if db.closed {
+		return ErrAlreadyClosed
+	}
+
+	base := db.manifest.Load().(*Manifest)
+
+	manifest, err := prepareCommit(base)
+	if err != nil {
+		return errors.Wrap(err, "commit preparation failed")
+	}
+
+	manifest.ID = atomic.AddUint32(&db.txid, 1)
+
+	for _, segment := range manifest.Segments {
+		err := segment.SaveUpdate(db.fs, manifest.ID)
+		if err != nil {
+			return errors.Wrap(err, "segment update failed")
+		}
+	}
+
+	err = manifest.Save(db.fs)
+	if err != nil {
+		return errors.Wrap(err, "save failed")
+	}
+
+	db.incFileRefs(manifest)
+	db.decFileRefs(base)
+
+	db.manifest.Store(manifest)
+
+	log.Printf("committed transaction %d (docs=%v, items=%v, segments=%v, checksum=%d)",
+		manifest.ID, manifest.NumDocs-manifest.NumDeletedDocs, manifest.NumItems, len(manifest.Segments), manifest.Checksum)
+
+	return nil
+}
+
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 	snapshot := db.newSnapshot()
@@ -161,12 +259,14 @@ func (db *DB) Transaction() (BulkWriter, error) {
 	defer db.mu.Unlock()
 
 	if db.closed {
+		snapshot.Close()
 		return nil, ErrAlreadyClosed
 	}
 
 	if db.wlock == nil {
 		lock, err := db.fs.Lock("write.lock")
 		if err != nil {
+			snapshot.Close()
 			return nil, errors.Wrap(err, "unable to acquire write lock")
 		}
 		log.Println("acquired write lock")
@@ -235,37 +335,6 @@ func (db *DB) newSnapshot() *Snapshot {
 
 func (db *DB) createSegment(input ItemReader) (*Segment, error) {
 	return CreateSegment(db.fs, atomic.AddUint32(&db.txid, 1), input)
-}
-
-func (db *DB) commit(manifest *Manifest) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if db.closed {
-		return ErrAlreadyClosed
-	}
-
-	if !manifest.HasChanges() {
-		return nil
-	}
-
-	id := atomic.AddUint32(&db.txid, 1)
-	base := db.manifest.Load().(*Manifest)
-
-	err := manifest.Commit(db.fs, id, base)
-	if err != nil {
-		return errors.Wrap(err, "manifest commit failed")
-	}
-
-	db.incFileRefs(manifest)
-	db.decFileRefs(base)
-
-	db.manifest.Store(manifest)
-
-	log.Printf("committed transaction %d (docs=%v, items=%v, segments=%v, checksum=%d)",
-		manifest.ID, manifest.NumDocs-manifest.NumDeletedDocs, manifest.NumItems, len(manifest.Segments), manifest.Checksum)
-
-	return nil
 }
 
 func (db *DB) Reader() ItemReader {

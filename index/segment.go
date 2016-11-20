@@ -561,5 +561,19 @@ func (r *segmentReader) ReadBlock() ([]Item, error) {
 		return nil, io.EOF
 	}
 	r.block++
-	return r.Segment.ReadBlock(i)
+	items, err := r.Segment.ReadBlock(i)
+	if err != nil {
+		return nil, err
+	}
+	if r.Segment.deletedDocs != nil {
+		i := 0
+		for _, item := range items {
+			if !r.Segment.deletedDocs.Contains(item.DocID) {
+				items[i] = item
+				i++
+			}
+		}
+		items = items[:i]
+	}
+	return items, nil
 }

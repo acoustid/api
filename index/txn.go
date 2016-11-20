@@ -121,43 +121,19 @@ func (txn *Transaction) Commit() error {
 		return errors.Wrap(err, "flush failed")
 	}
 
-	return txn.db.commit(txn.manifest)
+	return txn.db.commit(func(base *Manifest) (*Manifest, error) {
+		if base.ID != txn.snapshot.manifest.ID {
+			err := txn.manifest.rebase(base)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return txn.manifest, nil
+	})
 }
 
 func (txn *Transaction) Committed() bool {
 	return txn.manifest.ID != 0
-}
-
-func (txn *Transaction) compact() error {
-	err := txn.Flush()
-	if err != nil {
-		return errors.Wrap(err, "flush failed")
-	}
-
-	if len(txn.manifest.Segments) == 0 {
-		return nil
-	}
-
-	mp := NewTieredMergePolicy()
-	merges := mp.FindMerges(txn.manifest.Segments, 0)
-
-	for _, merge := range merges {
-		var readers []ItemReader
-		for _, segment := range merge.Segments {
-			readers = append(readers, segment.Reader())
-		}
-		segment, err := txn.db.createSegment(MergeItemReaders(readers...))
-		if err != nil {
-			return errors.Wrap(err, "segment merge failed")
-		}
-		txn.manifest.AddSegment(segment)
-		for _, segment := range merge.Segments {
-			txn.manifest.RemoveSegment(segment)
-		}
-		break
-	}
-
-	return nil
 }
 
 func (tx *Transaction) Close() error {
