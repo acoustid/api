@@ -13,13 +13,13 @@ import (
 	"strconv"
 )
 
-var (
-	hostOpt   = flag.String("host", "localhost", "host on which to listen")
-	portOpt   = flag.Int("port", 7765, "port number on which to listen")
-	dbPathOpt = flag.String("dbpath", "", "path to the database directory")
-)
-
 func main() {
+	var (
+		hostOpt   = flag.String("host", "localhost", "host on which to listen")
+		portOpt   = flag.Int("port", 7765, "port number on which to listen")
+		dbPathOpt = flag.String("dbpath", "", "path to the database directory")
+	)
+
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
@@ -35,8 +35,10 @@ func main() {
 		}
 	}
 
+	opts := *index.DefaultOptions
+
 	log.Printf("Opening database in %v", fs)
-	idx, err := index.Open(fs, true)
+	idx, err := index.Open(fs, true, &opts)
 	if err != nil {
 		log.Fatalf("Failed to open the database: %v", err)
 	}

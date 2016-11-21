@@ -81,7 +81,7 @@ func main() {
 	}
 	defer fs.Close()
 
-	idx, err := index.Open(fs, true)
+	idx, err := index.Open(fs, true, nil)
 	if err != nil {
 		log.Fatalf("Failed to open the index: %v", err)
 	}

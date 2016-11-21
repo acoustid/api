@@ -12,14 +12,26 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
-	"fmt"
-	"strings"
-	"github.com/acoustid/go-acoustid/util/intset"
+	"time"
 )
 
 var debugLog = log.New(ioutil.Discard, "", log.LstdFlags)
 
 var ErrAlreadyClosed = errors.New("already closed")
+
+// Options represents the options that can be set when opening a database.
+type Options struct {
+	// When enabled, the database will automatically run compactions in the background.
+	EnableAutoCompact bool
+
+	// How often to run automatic compactions. Only used if EnableAutoCompact is true.
+	AutoCompactInterval time.Duration
+}
+
+// DefaultOptions represent the options used if nil options are passed into Open().
+var DefaultOptions = &Options{
+	AutoCompactInterval: time.Second * 10,
+}
 
 type DB struct {
 	fs              vfs.FileSystem
@@ -28,14 +40,22 @@ type DB struct {
 	txid            uint32
 	manifest        atomic.Value
 	closed          bool
+	closing         chan struct{}
 	numSnapshots    int64
 	numTransactions int64
 	refs            map[string]int
 	orphanedFiles   chan string
+	mergeRequests   chan chan error
+	mergePolicy     MergePolicy
 	bg              syncutil.Group
+	opts *Options
 }
 
-func Open(fs vfs.FileSystem, create bool) (*DB, error) {
+func Open(fs vfs.FileSystem, create bool, opts *Options) (*DB, error) {
+	if opts == nil {
+		opts = DefaultOptions
+	}
+
 	var manifest Manifest
 	err := manifest.Load(fs, create)
 	if err != nil {
@@ -49,7 +69,7 @@ func Open(fs vfs.FileSystem, create bool) (*DB, error) {
 		}
 	}
 
-	db := &DB{fs: fs}
+	db := &DB{fs: fs, opts: opts}
 	db.init(&manifest)
 	return db, nil
 }
@@ -61,8 +81,83 @@ func (db *DB) init(manifest *Manifest) {
 	db.refs = make(map[string]int)
 	db.incFileRefs(manifest)
 
+	db.closing = make(chan struct{})
+
+	db.bg.Go(db.autoCompact)
+
 	db.orphanedFiles = make(chan string, 16)
 	db.bg.Go(db.deleteOrphanedFiles)
+
+	db.mergePolicy = NewTieredMergePolicy()
+	db.mergeRequests = make(chan chan error)
+	db.bg.Go(db.runMerges)
+
+}
+
+func (db *DB) Close() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	close(db.closing)
+	close(db.mergeRequests)
+	close(db.orphanedFiles)
+	db.bg.Wait()
+
+	if db.wlock != nil {
+		db.wlock.Close()
+		db.wlock = nil
+		log.Println("released write lock")
+	}
+
+	db.closed = true
+}
+
+func (db *DB) Compact() error {
+	ch := make(chan error)
+	db.mergeRequests <- ch
+	err := <-ch
+	return err
+}
+
+func (db *DB) autoCompact() error {
+	interval := 10 * time.Second
+	log.Printf("scheduling auto-compact to run every %v", interval)
+	ticker := time.NewTicker(interval)
+	for {
+		select {
+		case <-ticker.C:
+			err := db.Compact()
+			if err != nil {
+				log.Printf("auto-compact failed: %v", err)
+				interval += interval / 2
+				log.Printf("increasing auto-compact interval to %v", interval)
+				ticker.Stop()
+				ticker = time.NewTicker(interval)
+			}
+		case <-db.closing:
+			ticker.Stop()
+			return nil
+		}
+	}
+}
+
+func (db *DB) runMerges() error {
+	for ch := range db.mergeRequests {
+		ch <- db.runOneMerge(0)
+	}
+	return nil
+}
+
+func (db *DB) runOneMerge(maxSize int) error {
+	snapshot := db.newSnapshot()
+	defer snapshot.Close()
+
+	merge := db.mergePolicy.FindBestMerge(snapshot.manifest, maxSize)
+	if merge == nil {
+		return nil
+	}
+
+	return merge.Run(db)
 }
 
 func (db *DB) deleteOrphanedFiles() error {
@@ -75,22 +170,6 @@ func (db *DB) deleteOrphanedFiles() error {
 		}
 	}
 	return nil
-}
-
-func (db *DB) Close() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	close(db.orphanedFiles)
-	db.bg.Wait()
-
-	if db.wlock != nil {
-		db.wlock.Close()
-		db.wlock = nil
-		log.Println("released write lock")
-	}
-
-	db.closed = true
 }
 
 // Note: This must be called under a locked mutex.
@@ -129,64 +208,6 @@ func (db *DB) DeleteAll() error {
 
 func (db *DB) Import(stream ItemReader) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Import(stream) })
-}
-
-func (db *DB) Compact() error {
-	snapshot := db.newSnapshot()
-	defer snapshot.Close()
-
-	mp := NewTieredMergePolicy()
-	merge := mp.FindBestMerge(snapshot.manifest.Segments, 0)
-
-	if merge == nil {
-		debugLog.Print("no compaction required")
-		return nil
-	}
-
-	var ids []string
-	var readers []ItemReader
-	for _, segment := range merge.Segments {
-		ids = append(ids, fmt.Sprintf("%v", segment.ID))
-		readers = append(readers, segment.Reader())
-	}
-
-	log.Printf("merging segments %v", strings.Join(ids, ", "))
-	newSegment, err := db.createSegment(MergeItemReaders(readers...))
-	if err != nil {
-		return errors.Wrap(err, "segment merge failed")
-	}
-
-	err = db.commit(func(base *Manifest) (*Manifest, error) {
-		manifest := base.Clone()
-		if base.ID == snapshot.manifest.ID {
-			for _, segment := range merge.Segments {
-				delete(manifest.Segments, segment.ID)
-			}
-			manifest.Segments[newSegment.ID] = newSegment
-		} else {
-			for _, segment := range merge.Segments {
-				manifest.RemoveSegment(segment)
-			}
-			deletedDocs := intset.NewSparseBitSet(0)
-			for _, oldSegment := range merge.Segments {
-				segment, exists := manifest.Segments[oldSegment.ID]
-				if !exists {
-					return nil, errors.Wrapf(errConflict, "segment %v no longer exists", oldSegment.ID)
-				}
-				if segment.UpdateID != oldSegment.UpdateID {
-					deletedDocs.Union(segment.deletedDocs)
-				}
-			}
-			newSegment.DeleteMulti(deletedDocs)
-			manifest.addSegment(newSegment, false)
-		}
-		return manifest, nil
-	})
-	if err != nil {
-		return errors.Wrap(err, "commit failed")
-	}
-
-	return nil
 }
 
 func (db *DB) commit(prepareCommit func(base *Manifest) (*Manifest, error)) error {
@@ -228,7 +249,6 @@ func (db *DB) commit(prepareCommit func(base *Manifest) (*Manifest, error)) erro
 
 	return nil
 }
-
 
 func (db *DB) Search(query []uint32) (map[uint32]int, error) {
 	snapshot := db.newSnapshot()

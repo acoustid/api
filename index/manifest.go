@@ -86,6 +86,10 @@ func (m *Manifest) AddSegment(s *Segment) {
 
 // RemoveSegment removes a segment from the manifest and updates all internal stats.
 func (m *Manifest) RemoveSegment(s *Segment) {
+	s, exists := m.Segments[s.ID]
+	if !exists {
+		return
+	}
 	m.NumDocs -= s.Meta.NumDocs
 	m.NumDeletedDocs -= s.Meta.NumDeletedDocs
 	m.NumItems -= s.Meta.NumItems

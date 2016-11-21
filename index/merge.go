@@ -7,15 +7,19 @@ import (
 	"bytes"
 	"fmt"
 	"go4.org/sort"
-	"log"
 	"math"
+	"log"
+	"strings"
+	"github.com/pkg/errors"
+	"github.com/acoustid/go-acoustid/util/intset"
 )
 
 // Merge provides information necessary to perform a merge operation, resulting in one new segment.
 type Merge struct {
-	Segments []*Segment
-	Score    float64
-	Size     int
+	Segments   []*Segment
+	Score      float64
+	Size       int
+	newSegment *Segment
 }
 
 func (m Merge) String() string {
@@ -34,13 +38,66 @@ func (m Merge) String() string {
 	return buf.String()
 }
 
+func (m *Merge) Run(db *DB) error {
+	sort.Slice(m.Segments, func (i, j int) bool {
+		return m.Segments[i].ID < m.Segments[j].ID
+	})
+
+	var ids []string
+	var readers []ItemReader
+	for _, segment := range m.Segments {
+		ids = append(ids, fmt.Sprintf("%v", segment.ID))
+		readers = append(readers, segment.Reader())
+	}
+
+	segment, err := db.createSegment(MergeItemReaders(readers...))
+	if err != nil {
+		return errors.Wrap(err, "segment merge failed")
+	}
+
+	log.Printf("merged segments %v into %v", strings.Join(ids, ", "), segment.ID)
+	m.newSegment = segment
+
+	return db.commit(m.prepareCommit)
+}
+
+func (m *Merge) prepareCommit(base *Manifest) (*Manifest, error) {
+	manifest := base.Clone()
+
+	var deletedDocs *intset.SparseBitSet
+	for _, oldSegment := range m.Segments {
+		segment, exists := manifest.Segments[oldSegment.ID]
+		if !exists {
+			return nil, errors.Wrapf(errConflict, "segment %v no longer exists", oldSegment.ID)
+		}
+		if segment.UpdateID != oldSegment.UpdateID {
+			if deletedDocs == nil {
+				deletedDocs = segment.deletedDocs.Clone()
+			} else {
+				deletedDocs.Union(segment.deletedDocs)
+			}
+		}
+		manifest.RemoveSegment(segment)
+	}
+	if deletedDocs != nil {
+		m.newSegment.DeleteMulti(deletedDocs)
+	}
+
+	_, exists := manifest.Segments[m.newSegment.ID]
+	if exists {
+		return nil, errors.Wrapf(errConflict, "segment %v already exists", m.newSegment.ID)
+	}
+	manifest.addSegment(m.newSegment, false)
+
+	return manifest, nil
+}
+
 // MergePolicy determines a sequence of merge operations.
 type MergePolicy interface {
-	FindMerges(segments []*Segment, maxSize int) (merges []Merge)
+	FindBestMerge(manifest *Manifest, maxSize int) *Merge
 }
 
 // TieredMergePolicy is an adaptation of the algorithm from Lucene's TieredMergePolicy written by Michael McCandless.
-//
 // https://github.com/apache/lucene-solr/blob/master/lucene/core/src/java/org/apache/lucene/index/TieredMergePolicy.java
 type TieredMergePolicy struct {
 	// FloorSegmentSize is the smallest segment size we will consider.  Segments smaller than this
@@ -62,10 +119,9 @@ type TieredMergePolicy struct {
 	// but fewer segments.  This should be >= MaxMergeAtOnce otherwise you'll force too much merging to occur.
 	// Default is 10.
 	MaxSegmentsPerTier int
-
-	Verbose bool
 }
 
+// NewTieredMergePolicy creates a new TieredMergePolicy instance with the default options.
 func NewTieredMergePolicy() *TieredMergePolicy {
 	return &TieredMergePolicy{
 		FloorSegmentSize:     1024 * 1024,
@@ -82,7 +138,47 @@ func (mp *TieredMergePolicy) floorSize(size int) int {
 	return size
 }
 
-func (mp *TieredMergePolicy) findBestMerge(segments []*Segment, maxSize int) (bestMerge *Merge) {
+func (mp *TieredMergePolicy) FindBestMerge(manifest *Manifest, maxSize int) *Merge {
+	if len(manifest.Segments) == 0 {
+		return nil
+	}
+	if maxSize == 0 {
+		maxSize = mp.MaxMergedSegmentSize
+	}
+
+	// Filter our segments that are over-sized and we could not potentially merge them.
+	segments := make([]*Segment, 0, len(manifest.Segments))
+	for _, segment := range manifest.Segments {
+		if segment.Size() <= maxSize/2 {
+			segments = append(segments, segment)
+		}
+	}
+
+	// Sort segments by their size in decreasing order.
+	sort.Slice(segments, func(i, j int) bool { return segments[i].Size() >= segments[j].Size() })
+
+	// Compute the max allowed segments in the index considering the merge policy options.
+	var allowedSegmentCount, remainingSize int
+	for _, segment := range segments {
+		remainingSize += segment.Size()
+	}
+	levelSize := mp.floorSize(segments[len(segments)-1].Size())
+	for {
+		levelSegmentCount := (remainingSize + levelSize - 1) / levelSize
+		if levelSegmentCount < mp.MaxSegmentsPerTier {
+			allowedSegmentCount += levelSegmentCount
+			break
+		}
+		allowedSegmentCount += mp.MaxSegmentsPerTier
+		remainingSize -= mp.MaxSegmentsPerTier * levelSize
+		levelSize *= mp.MaxMergeAtOnce
+	}
+
+	if len(segments) <= allowedSegmentCount {
+		return nil
+	}
+
+	var bestMerge *Merge
 	for i := 0; i <= len(segments)-mp.MaxMergeAtOnce; i++ {
 		var merge Merge
 		var mergeSize, mergeSizeFloored int
@@ -110,93 +206,9 @@ func (mp *TieredMergePolicy) findBestMerge(segments []*Segment, maxSize int) (be
 		merge.Score = skew * math.Pow(float64(mergeSize), 0.05)
 		merge.Size = mergeSize
 
-		if mp.Verbose {
-			log.Printf("FindMerges: merge %s", merge)
-		}
-
 		if bestMerge == nil || merge.Score < bestMerge.Score {
 			bestMerge = &merge
 		}
 	}
-	return
-}
-
-func (mp *TieredMergePolicy) FindBestMerge(origSegments map[uint32]*Segment, maxSize int) *Merge {
-	merges := mp.FindMerges(origSegments, maxSize)
-	if len(merges) == 0 {
-		return nil
-	}
-	return merges[0]
-}
-
-func (mp *TieredMergePolicy) FindMerges(origSegments map[uint32]*Segment, maxSize int) (merges []*Merge) {
-	if maxSize == 0 {
-		maxSize = mp.MaxMergedSegmentSize
-	}
-
-	// Filter our segments that are over-sized and we could not potentially merge them.
-	segments := make([]*Segment, 0, len(origSegments))
-	for _, segment := range origSegments {
-		if mp.Verbose {
-			size := segment.Size()
-			var extra string
-			if size > maxSize/2 {
-				extra += " [skip: too large]"
-			} else if size < mp.FloorSegmentSize {
-				extra += " [floored]"
-			}
-			log.Printf("FindMerges: Segment: %d, Size: %d%s", segment.ID, segment.Size(), extra)
-		}
-		if segment.Size() <= maxSize/2 {
-			segments = append(segments, segment)
-		}
-	}
-
-	// Sort segments by their size in decreasing order.
-	sort.Slice(segments, func(i, j int) bool { return segments[i].Size() >= segments[j].Size() })
-
-	// Compute the max allowed segments in the index considering the merge policy options.
-	var allowedSegmentCount, remainingSize int
-	for _, segment := range segments {
-		remainingSize += segment.Size()
-	}
-	levelSize := mp.floorSize(segments[len(segments)-1].Size())
-	for {
-		levelSegmentCount := (remainingSize + levelSize - 1) / levelSize
-		if levelSegmentCount < mp.MaxSegmentsPerTier {
-			allowedSegmentCount += levelSegmentCount
-			break
-		}
-		allowedSegmentCount += mp.MaxSegmentsPerTier
-		remainingSize -= mp.MaxSegmentsPerTier * levelSize
-		levelSize *= mp.MaxMergeAtOnce
-	}
-
-	// Find possible merges until we run out of candidates.
-	for len(segments) > allowedSegmentCount {
-		merge := mp.findBestMerge(segments, maxSize)
-		if merge == nil {
-			break
-		}
-		merges = append(merges, merge)
-
-		if mp.Verbose {
-			log.Printf("FindMerges: merge %s", merge)
-		}
-
-		// Filter out segments that we just selected to be merged.
-		removed := make(map[uint32]bool, len(merge.Segments))
-		for _, segment := range merge.Segments {
-			removed[segment.ID] = true
-		}
-		eligible := segments[:0]
-		for _, segment := range segments {
-			if !removed[segment.ID] {
-				eligible = append(eligible, segment)
-			}
-		}
-		segments = eligible
-	}
-
-	return
+	return bestMerge
 }

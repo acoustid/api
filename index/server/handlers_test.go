@@ -14,7 +14,7 @@ import (
 )
 
 func TestDeleteHandler(t *testing.T) {
-	db, err := index.Open(vfs.CreateMemDir(), true)
+	db, err := index.Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create test db")
 	defer db.Close()
 
@@ -33,7 +33,7 @@ func TestDeleteHandler(t *testing.T) {
 }
 
 func TestDeleteAllHandler(t *testing.T) {
-	db, err := index.Open(vfs.CreateMemDir(), true)
+	db, err := index.Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create test db")
 	defer db.Close()
 
@@ -52,7 +52,7 @@ func TestDeleteAllHandler(t *testing.T) {
 }
 
 func TestUpdateHandler(t *testing.T) {
-	db, err := index.Open(vfs.CreateMemDir(), true)
+	db, err := index.Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create test db")
 	defer db.Close()
 
@@ -84,7 +84,7 @@ func TestUpdateHandler(t *testing.T) {
 }
 
 func TestAddHandler(t *testing.T) {
-	db, err := index.Open(vfs.CreateMemDir(), true)
+	db, err := index.Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create test db")
 	defer db.Close()
 
@@ -105,7 +105,7 @@ func TestAddHandler(t *testing.T) {
 }
 
 func TestStatsHandler(t *testing.T) {
-	db, err := index.Open(vfs.CreateMemDir(), true)
+	db, err := index.Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create test db")
 	defer db.Close()
 

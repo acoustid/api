@@ -14,7 +14,7 @@ import (
 func TestDB(t *testing.T) {
 	fs := vfs.CreateMemDir()
 
-	db, err := Open(fs, true)
+	db, err := Open(fs, true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -41,13 +41,13 @@ func TestDB(t *testing.T) {
 	err = db.Delete(1234)
 	require.NoError(t, err)
 
-	db2, err := Open(fs, false)
+	db2, err := Open(fs, false, nil)
 	require.NoError(t, err)
 	defer db2.Close()
 }
 
 func TestDB_Transaction_NoCommit(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
@@ -62,7 +62,7 @@ func TestDB_Transaction_NoCommit(t *testing.T) {
 }
 
 func TestDB_Transaction_DeleteUncommitted(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
@@ -83,7 +83,7 @@ func TestDB_Delete(t *testing.T) {
 	defer fs.Close()
 
 	func() {
-		db, err := Open(fs, true)
+		db, err := Open(fs, true, nil)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
 
@@ -96,7 +96,7 @@ func TestDB_Delete(t *testing.T) {
 	}()
 
 	func() {
-		db, err := Open(fs, false)
+		db, err := Open(fs, false, nil)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()
 
@@ -111,7 +111,7 @@ func TestDB_Add(t *testing.T) {
 	defer fs.Close()
 
 	func() {
-		db, err := Open(fs, true)
+		db, err := Open(fs, true, nil)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
 
@@ -128,7 +128,7 @@ func TestDB_Add(t *testing.T) {
 	}()
 
 	func() {
-		db, err := Open(fs, false)
+		db, err := Open(fs, false, nil)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()
 
@@ -147,7 +147,7 @@ func TestDB_DeleteAll(t *testing.T) {
 	defer fs.Close()
 
 	func() {
-		db, err := Open(fs, true)
+		db, err := Open(fs, true, nil)
 		require.NoError(t, err, "failed to create a new db")
 		defer db.Close()
 
@@ -161,7 +161,7 @@ func TestDB_DeleteAll(t *testing.T) {
 	}()
 
 	func() {
-		db, err := Open(fs, false)
+		db, err := Open(fs, false, nil)
 		require.NoError(t, err, "failed to open db")
 		defer db.Close()
 
@@ -175,7 +175,7 @@ func TestDB_Import(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
-	db, err := Open(fs, true)
+	db, err := Open(fs, true, nil)
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
@@ -193,7 +193,7 @@ func TestDB_Reader(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
-	db, err := Open(fs, true)
+	db, err := Open(fs, true, nil)
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
@@ -208,7 +208,7 @@ func TestDB_Reader(t *testing.T) {
 }
 
 func TestDB_Compact(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err, "failed to create a new db")
 	defer db.Close()
 
@@ -234,7 +234,7 @@ func assertHitsEqual(t *testing.T, db *DB, query []uint32, expected map[uint32]i
 }
 
 func TestDB_Commit_ConcurrentInserts(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -254,7 +254,7 @@ func TestDB_Commit_ConcurrentInserts(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentUpdates(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -280,7 +280,7 @@ func TestDB_Commit_ConcurrentUpdates(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentDeletes(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -304,7 +304,7 @@ func TestDB_Commit_ConcurrentDeletes(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentDeletesMerge(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -329,7 +329,7 @@ func TestDB_Commit_ConcurrentDeletesMerge(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentUpdateAndDelete(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -355,7 +355,7 @@ func TestDB_Commit_ConcurrentUpdateAndDelete(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentDeleteAndUpdate(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -381,7 +381,7 @@ func TestDB_Commit_ConcurrentDeleteAndUpdate(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentDeleteAll(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -405,7 +405,7 @@ func TestDB_Commit_ConcurrentDeleteAll(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentDeleteAllAndUpdate(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -430,7 +430,7 @@ func TestDB_Commit_ConcurrentDeleteAllAndUpdate(t *testing.T) {
 }
 
 func TestDB_Commit_ConcurrentUpdateAndDeleteAll(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true)
+	db, err := Open(vfs.CreateMemDir(), true, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
