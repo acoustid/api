@@ -206,6 +206,7 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item, buf1 []byte, bu
 		lastTerm = val.Term
 	}
 	lastTerm = baseTerm
+	lastDocID := baseDocID
 
 	var termBits int
 	if maxTermDiff > 0 {
@@ -216,8 +217,11 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item, buf1 []byte, bu
 	if termBits <= 8 {
 		flags |= Fixed8BitTerms
 		for i, it := range input {
+			if it.Term != lastTerm {
+				lastDocID = baseDocID
+			}
 			buf1[ptr1] = byte(it.Term - lastTerm)
-			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
+			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-lastDocID)
 			if BlockHeaderSize+ptr1+ptr2+1+n2 >= s.Meta.BlockSize {
 				n = i
 				break
@@ -225,13 +229,17 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item, buf1 []byte, bu
 			ptr1++
 			ptr2 += n2
 			lastTerm = it.Term
+			lastDocID = it.DocID
 			s.Meta.Checksum += it.Term + it.DocID
 			s.docs.Add(it.DocID)
 		}
 	} else {
 		for i, it := range input {
+			if it.Term != lastTerm {
+				lastDocID = baseDocID
+			}
 			n1 := util.PutUvarint32(buf1[ptr1:], it.Term-lastTerm)
-			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-baseDocID)
+			n2 := util.PutUvarint32(buf2[ptr2:], it.DocID-lastDocID)
 			if BlockHeaderSize+ptr1+ptr2+n1+n2 >= s.Meta.BlockSize {
 				n = i
 				break
@@ -239,6 +247,7 @@ func (s *Segment) writeBlock(writer *bufio.Writer, input []Item, buf1 []byte, bu
 			ptr1 += n1
 			ptr2 += n2
 			lastTerm = it.Term
+			lastDocID = it.DocID
 			s.Meta.Checksum += it.Term + it.DocID
 			s.docs.Add(it.DocID)
 		}
@@ -376,6 +385,7 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 	if len(query) == 0 && query[0] > s.Meta.MaxTerm {
 		return nil
 	}
+	var buf segmentBlockBuffers
 	blocks := s.blockIndex
 	qi, bi := 0, 0
 	for {
@@ -388,21 +398,21 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 			q = query[qi]
 		}
 		bi += sort.Search(len(blocks)-bi-1, func(i int) bool { return blocks[bi+i+1] >= q })
-		values, err := s.ReadBlock(bi)
+		items, err := s.ReadBlock(bi, &buf)
 		if err != nil {
 			return err
 		}
-		for _, val := range values {
-			for val.Term > q {
+		for _, item := range items {
+			for item.Term > q {
 				qi++
 				if qi == len(query) {
 					return nil
 				}
 				q = query[qi]
 			}
-			if val.Term == q {
-				if s.deletedDocs == nil || !s.deletedDocs.Contains(val.DocID) {
-					callback(val.DocID)
+			if item.Term == q {
+				if s.deletedDocs == nil || !s.deletedDocs.Contains(item.DocID) {
+					callback(item.DocID)
 				}
 			}
 		}
@@ -413,57 +423,75 @@ func (s *Segment) Search(query []uint32, callback func(uint32)) error {
 	}
 }
 
-func (s *Segment) ReadBlock(i int) ([]Item, error) {
+type segmentBlockBuffers struct {
+	data  []byte
+	items []Item
+}
+
+func (s *Segment) ReadBlock(i int, buf *segmentBlockBuffers) ([]Item, error) {
 	if i >= s.Meta.NumBlocks {
 		return nil, ErrBlockNotFound
 	}
 
-	data := make([]byte, s.Meta.BlockSize)
+	if len(buf.data) != s.Meta.BlockSize {
+		buf.data = make([]byte, s.Meta.BlockSize)
+	}
+	data := buf.data
+
 	_, err := s.reader.ReadAt(data, int64(i)*int64(s.Meta.BlockSize))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(data) <= BlockHeaderSize {
-		return nil, ErrInvalidBlockHeader
-	}
-
 	flags := binary.LittleEndian.Uint16(data)
-	n := int(flags & 0x0fff)
-	values := make([]Item, n)
+	numItems := int(flags & 0x0fff)
+
+	if cap(buf.items) >= numItems {
+		buf.items = buf.items[:numItems]
+	} else {
+		buf.items = make([]Item, numItems, numItems + numItems /4)
+	}
+	items := buf.items
 
 	ptr := BlockHeaderSize
 
-	term := s.blockIndex[i]
+	lastTerm := s.blockIndex[i]
 	if flags&Fixed8BitTerms != 0 {
-		for i := range values {
-			term += uint32(data[ptr])
-			values[i].Term = term
+		for i := range items {
+			lastTerm += uint32(data[ptr])
+			items[i].Term = lastTerm
 			ptr++
 		}
 	} else {
-		for i := range values {
-			delta, nn := util.Uvarint32(data[ptr:])
-			if nn <= 0 {
+		for i := range items {
+			delta, n := util.Uvarint32(data[ptr:])
+			if n <= 0 {
 				return nil, ErrInvalidBlockData
 			}
-			term += delta
-			values[i].Term = term
-			ptr += nn
+			ptr += n
+			lastTerm += delta
+			items[i].Term = lastTerm
 		}
 	}
 
 	baseDocID := binary.LittleEndian.Uint32(data[4:])
-	for i := range values {
-		delta, nn := util.Uvarint32(data[ptr:])
-		if nn <= 0 {
+	lastDocID := baseDocID
+	lastTerm = s.blockIndex[i]
+	for i := range items {
+		if lastTerm != items[i].Term {
+			lastTerm = items[i].Term
+			lastDocID = baseDocID
+		}
+		delta, n := util.Uvarint32(data[ptr:])
+		if n <= 0 {
 			return nil, ErrInvalidBlockData
 		}
-		values[i].DocID = baseDocID + delta
-		ptr += nn
+		ptr += n
+		lastDocID += delta
+		items[i].DocID = lastDocID
 	}
 
-	return values, nil
+	return items, nil
 }
 
 // Contains returns true if the segment contains the given docID.
@@ -554,6 +582,7 @@ func (s *Segment) Reader() ItemReader {
 type segmentReader struct {
 	*Segment
 	block int
+	buf   segmentBlockBuffers
 }
 
 func (r *segmentReader) ReadBlock() ([]Item, error) {
@@ -562,7 +591,7 @@ func (r *segmentReader) ReadBlock() ([]Item, error) {
 		return nil, io.EOF
 	}
 	r.block++
-	items, err := r.Segment.ReadBlock(i)
+	items, err := r.Segment.ReadBlock(i, &r.buf)
 	if err != nil {
 		return nil, err
 	}

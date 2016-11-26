@@ -63,11 +63,16 @@ func (txn *Transaction) Delete(docID uint32) error {
 }
 
 func (txn *Transaction) Import(input ItemReader) error {
-	txn.createSegmentAsync(input)
+	segment, err := txn.db.createSegment(input)
+	if err != nil {
+		return errors.Wrap(err, "failed to create a new segment")
+	}
+
+	txn.manifest.AddSegment(segment)
 	return nil
 }
 
-func (txn *Transaction) createSegmentAsync(input ItemReader) {
+func (txn *Transaction) createSegmentAsync(buffer *ItemBuffer) {
 	done := false
 	for !done {
 		select {
@@ -80,7 +85,7 @@ func (txn *Transaction) createSegmentAsync(input ItemReader) {
 	}
 
 	txn.writers.Go(func() error {
-		segment, err := txn.db.createSegment(input)
+		segment, err := txn.db.createSegment(buffer.Reader())
 		if err != nil {
 			return errors.Wrap(err, "failed to create a new segment")
 		}
@@ -95,7 +100,7 @@ func (txn *Transaction) flush(force bool) bool {
 		n = 0
 	}
 	if txn.buffer.NumItems() > n {
-		txn.createSegmentAsync(txn.buffer.Reader())
+		txn.createSegmentAsync(txn.buffer)
 		txn.buffer = new(ItemBuffer)
 		return true
 	}
