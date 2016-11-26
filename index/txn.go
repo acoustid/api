@@ -44,7 +44,7 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	txn.buffer.Add(docID, terms)
 	debugLog.Printf("added doc %v to the transaction buffer", docID)
 
-	txn.maybeFlush()
+	txn.flush(false)
 
 	return nil
 }
@@ -62,25 +62,12 @@ func (txn *Transaction) Delete(docID uint32) error {
 	return nil
 }
 
-func (txn *Transaction) flush() {
-	if txn.buffer.Empty() {
-		return
-	}
-
-	buffer := txn.buffer
-	txn.buffer = new(ItemBuffer)
-
-	txn.writers.Go(func() error {
-		segment, err := txn.db.createSegment(buffer.Reader())
-		if err != nil {
-			return errors.Wrap(err, "failed to create a new segment")
-		}
-		txn.createdSegments <- segment
-		return nil
-	})
+func (txn *Transaction) Import(input ItemReader) error {
+	txn.createSegmentAsync(input)
+	return nil
 }
 
-func (txn *Transaction) maybeFlush() {
+func (txn *Transaction) createSegmentAsync(input ItemReader) {
 	done := false
 	for !done {
 		select {
@@ -92,9 +79,27 @@ func (txn *Transaction) maybeFlush() {
 		}
 	}
 
-	if txn.buffer.NumItems() > MaxBufferedItems {
-		txn.flush()
+	txn.writers.Go(func() error {
+		segment, err := txn.db.createSegment(input)
+		if err != nil {
+			return errors.Wrap(err, "failed to create a new segment")
+		}
+		txn.createdSegments <- segment
+		return nil
+	})
+}
+
+func (txn *Transaction) flush(force bool) bool {
+	n := MaxBufferedItems
+	if force {
+		n = 0
 	}
+	if txn.buffer.NumItems() > n {
+		txn.createSegmentAsync(txn.buffer.Reader())
+		txn.buffer = new(ItemBuffer)
+		return true
+	}
+	return false
 }
 
 func (txn *Transaction) waitForWriters() error {
@@ -117,7 +122,7 @@ func (txn *Transaction) Commit() error {
 		return ErrCommitted
 	}
 
-	txn.flush()
+	txn.flush(true)
 
 	err := txn.waitForWriters()
 	if err != nil {

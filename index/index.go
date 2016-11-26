@@ -15,7 +15,7 @@ type Searcher interface {
 	Search(terms []uint32) (map[uint32]int, error)
 }
 
-type Writer interface {
+type Batch interface {
 	io.Closer
 
 	// Add adds a document to the index. If the document already exists, it is updated.
@@ -23,10 +23,9 @@ type Writer interface {
 
 	// Delete deletes a document from the index.
 	Delete(docID uint32) error
-}
 
-type BulkWriter interface {
-	Writer
+	// Import adds a pre-sorted stream of document terms into the index.
+	Import(items ItemReader) error
 
 	// Commits applies atomically all previous operations to the index.
 	Commit() error

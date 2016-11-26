@@ -195,28 +195,16 @@ func (db *DB) decFileRefs(m *Manifest) {
 }
 
 func (db *DB) Add(docID uint32, hashes []uint32) error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Add(docID, hashes) })
+	return db.RunInTransaction(func(txn Batch) error { return txn.Add(docID, hashes) })
 }
 
 func (db *DB) Delete(docID uint32) error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Delete(docID) })
+	return db.RunInTransaction(func(txn Batch) error { return txn.Delete(docID) })
 }
 
 // Import adds a stream of items to the index.
 func (db *DB) Import(input ItemReader) error {
-	snapshot := db.newSnapshot()
-	defer snapshot.Close()
-
-	segment, err := db.createSegment(input)
-	if err != nil {
-		return errors.Wrap(err, "failed to create a new segment")
-	}
-
-	return db.commit(func(base *Manifest) (*Manifest, error) {
-		manifest := base.Clone()
-		manifest.AddSegment(segment)
-		return manifest, nil
-	})
+	return db.RunInTransaction(func(txn Batch) error { return txn.Import(input) })
 }
 
 // Truncate deletes all docs from the index.
@@ -295,7 +283,7 @@ func (db *DB) closeTransaction(tx *Transaction) error {
 }
 
 // Transaction starts a new write transaction. You need to explicitly call Commit for the changes to be applied.
-func (db *DB) Transaction() (BulkWriter, error) {
+func (db *DB) Transaction() (Batch, error) {
 	snapshot := db.newSnapshot()
 
 	db.mu.Lock()
@@ -328,7 +316,7 @@ func (db *DB) Transaction() (BulkWriter, error) {
 
 // RunInTransaction executes the given function in a transaction. If the function does not return an error,
 // the transaction will be automatically committed.
-func (db *DB) RunInTransaction(fn func(txn BulkWriter) error) error {
+func (db *DB) RunInTransaction(fn func(txn Batch) error) error {
 	txn, err := db.Transaction()
 	if err != nil {
 		return err
