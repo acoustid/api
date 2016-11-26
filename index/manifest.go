@@ -23,7 +23,6 @@ type Manifest struct {
 	Segments        map[uint32]*Segment `json:"segments"`
 	addedSegments   map[uint32]struct{}
 	removedSegments map[uint32]struct{}
-	deleteAll       bool
 }
 
 func NewManifest() *Manifest {
@@ -85,10 +84,10 @@ func (m *Manifest) AddSegment(s *Segment) {
 }
 
 // RemoveSegment removes a segment from the manifest and updates all internal stats.
-func (m *Manifest) RemoveSegment(s *Segment) {
+func (m *Manifest) RemoveSegment(s *Segment) bool {
 	s, exists := m.Segments[s.ID]
 	if !exists {
-		return
+		return false
 	}
 	m.NumDocs -= s.Meta.NumDocs
 	m.NumDeletedDocs -= s.Meta.NumDeletedDocs
@@ -96,6 +95,7 @@ func (m *Manifest) RemoveSegment(s *Segment) {
 	m.Checksum -= s.Meta.Checksum
 	delete(m.Segments, s.ID)
 	m.removedSegments[s.ID] = struct{}{}
+	return true
 }
 
 func (m *Manifest) Delete(docID uint32) {
@@ -106,11 +106,6 @@ func (m *Manifest) Delete(docID uint32) {
 		}
 		m.NumDeletedDocs += segment.NumDeletedDocs()
 	}
-}
-
-func (m *Manifest) DeleteAll() {
-	m.Reset()
-	m.deleteAll = true
 }
 
 func (m *Manifest) Load(fs vfs.FileSystem, create bool) error {
@@ -192,21 +187,19 @@ func (m *Manifest) rebase(base *Manifest) error {
 	}
 
 	// Copy segments that are only present in the base manifest, but delete duplicate docs from them.
-	if !m.deleteAll {
-		for id, segment := range base.Segments {
-			_, exists := m.Segments[id]
-			if !exists {
-				segment := segment.Clone()
-				if len(m.removedSegments) == 0 {
-					for id2 := range m.addedSegments {
-						segment.DeleteMulti(m.Segments[id2].docs)
-					}
-					for id2 := range updatedSegments {
-						segment.DeleteMulti(m.Segments[id2].deletedDocs)
-					}
+	for id, segment := range base.Segments {
+		_, exists := m.Segments[id]
+		if !exists {
+			segment := segment.Clone()
+			if len(m.removedSegments) == 0 {
+				for id2 := range m.addedSegments {
+					segment.DeleteMulti(m.Segments[id2].docs)
 				}
-				m.addSegment(segment, false)
+				for id2 := range updatedSegments {
+					segment.DeleteMulti(m.Segments[id2].deletedDocs)
+				}
 			}
+			m.addSegment(segment, false)
 		}
 	}
 
@@ -248,7 +241,7 @@ func (m *Manifest) Commit(fs vfs.FileSystem, id uint32, base *Manifest) error {
 }
 
 func (m *Manifest) HasChanges() bool {
-	if len(m.addedSegments) > 0 || len(m.removedSegments) > 0 || m.deleteAll {
+	if len(m.addedSegments) > 0 || len(m.removedSegments) > 0 {
 		return true
 	}
 	for _, segment := range m.Segments {

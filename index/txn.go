@@ -62,34 +62,6 @@ func (txn *Transaction) Delete(docID uint32) error {
 	return nil
 }
 
-func (txn *Transaction) DeleteAll() error {
-	if txn.Committed() {
-		return ErrCommitted
-	}
-
-	txn.buffer.Reset()
-	txn.manifest.DeleteAll()
-
-	debugLog.Print("removed all segments")
-	return nil
-}
-
-func (txn *Transaction) Import(stream ItemReader) error {
-	if txn.Committed() {
-		return ErrCommitted
-	}
-
-	segment, err := txn.db.createSegment(stream)
-	if err != nil {
-		return errors.Wrap(err, "failed to create a new segment")
-	}
-
-	txn.manifest.AddSegment(segment)
-	debugLog.Printf("added imported segment %v", segment.ID)
-
-	return nil
-}
-
 func (txn *Transaction) flush() {
 	if txn.buffer.Empty() {
 		return

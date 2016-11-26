@@ -202,12 +202,35 @@ func (db *DB) Delete(docID uint32) error {
 	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Delete(docID) })
 }
 
-func (db *DB) DeleteAll() error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.DeleteAll() })
+// Import adds a stream of items to the index.
+func (db *DB) Import(input ItemReader) error {
+	snapshot := db.newSnapshot()
+	defer snapshot.Close()
+
+	segment, err := db.createSegment(input)
+	if err != nil {
+		return errors.Wrap(err, "failed to create a new segment")
+	}
+
+	return db.commit(func(base *Manifest) (*Manifest, error) {
+		manifest := base.Clone()
+		manifest.AddSegment(segment)
+		return manifest, nil
+	})
 }
 
-func (db *DB) Import(stream ItemReader) error {
-	return db.RunInTransaction(func(txn BulkWriter) error { return txn.Import(stream) })
+// Truncate deletes all docs from the index.
+func (db *DB) Truncate() error {
+	snapshot := db.newSnapshot()
+	defer snapshot.Close()
+
+	return db.commit(func(base *Manifest) (*Manifest, error) {
+		manifest := base.Clone()
+		for _, segment := range snapshot.manifest.Segments {
+			manifest.RemoveSegment(segment)
+		}
+		return manifest, nil
+	})
 }
 
 func (db *DB) commit(prepareCommit func(base *Manifest) (*Manifest, error)) error {

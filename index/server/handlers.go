@@ -42,7 +42,7 @@ type DeleteAllHandler struct {
 }
 
 func (h *DeleteAllHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	err := h.db.DeleteAll()
+	err := h.db.Truncate()
 	if err != nil {
 		log.Printf("delete failed: %v", err)
 		writeErrorResponse(w, 500, "internal error")

@@ -142,7 +142,7 @@ func TestDB_Add(t *testing.T) {
 	}()
 }
 
-func TestDB_DeleteAll(t *testing.T) {
+func TestDB_Truncate(t *testing.T) {
 	fs := vfs.CreateMemDir()
 	defer fs.Close()
 
@@ -153,7 +153,7 @@ func TestDB_DeleteAll(t *testing.T) {
 
 		require.NoError(t, db.Add(1, []uint32{7, 8, 9}), "add failed")
 		require.NoError(t, db.Add(2, []uint32{3, 4, 5}), "add failed")
-		require.NoError(t, db.DeleteAll(), "truncate failed")
+		require.NoError(t, db.Truncate(), "truncate failed")
 
 		hits, err := db.Search([]uint32{7, 8, 9, 3, 4, 5})
 		require.NoError(t, err, "search failed")
@@ -378,78 +378,4 @@ func TestDB_Commit_ConcurrentDeleteAndUpdate(t *testing.T) {
 	assertNoHits(t, db, []uint32{1})
 	assertNoHits(t, db, []uint32{2})
 	assertHitsEqual(t, db, []uint32{3}, map[uint32]int{1: 1})
-}
-
-func TestDB_Commit_ConcurrentDeleteAll(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true, nil)
-	require.NoError(t, err)
-	defer db.Close()
-
-	tx1, err := db.Transaction()
-	require.NoError(t, err)
-	tx1.Add(1, []uint32{1})
-	require.NoError(t, tx1.Commit())
-
-	tx2, err := db.Transaction()
-	require.NoError(t, err)
-	tx2.DeleteAll()
-
-	tx3, err := db.Transaction()
-	require.NoError(t, err)
-	tx3.DeleteAll()
-
-	require.NoError(t, tx2.Commit())
-	require.NoError(t, tx3.Commit())
-
-	assertNoHits(t, db, []uint32{1})
-}
-
-func TestDB_Commit_ConcurrentDeleteAllAndUpdate(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true, nil)
-	require.NoError(t, err)
-	defer db.Close()
-
-	tx1, err := db.Transaction()
-	require.NoError(t, err)
-	tx1.Add(1, []uint32{1})
-	require.NoError(t, tx1.Commit())
-
-	tx2, err := db.Transaction()
-	require.NoError(t, err)
-	tx2.DeleteAll()
-
-	tx3, err := db.Transaction()
-	require.NoError(t, err)
-	tx3.Add(1, []uint32{3})
-
-	require.NoError(t, tx2.Commit())
-	require.NoError(t, tx3.Commit())
-
-	assertNoHits(t, db, []uint32{1})
-	assertHitsEqual(t, db, []uint32{3}, map[uint32]int{1: 1})
-}
-
-func TestDB_Commit_ConcurrentUpdateAndDeleteAll(t *testing.T) {
-	db, err := Open(vfs.CreateMemDir(), true, nil)
-	require.NoError(t, err)
-	defer db.Close()
-
-	tx1, err := db.Transaction()
-	require.NoError(t, err)
-	tx1.Add(1, []uint32{1})
-	require.NoError(t, tx1.Commit())
-
-	tx2, err := db.Transaction()
-	require.NoError(t, err)
-	tx2.Add(1, []uint32{2})
-
-	tx3, err := db.Transaction()
-	require.NoError(t, err)
-	tx3.DeleteAll()
-
-	require.NoError(t, tx2.Commit())
-	require.NoError(t, tx3.Commit())
-
-	assertNoHits(t, db, []uint32{1})
-	assertNoHits(t, db, []uint32{2})
 }
