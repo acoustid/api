@@ -6,7 +6,6 @@ package index
 import (
 	"github.com/pkg/errors"
 	"go4.org/syncutil"
-	"log"
 )
 
 type Transaction struct {
@@ -24,10 +23,13 @@ const MaxBufferedItems = 10 * 1024 * 1024
 
 var ErrCommitted = errors.New("transaction is already committed")
 
-func (tx *Transaction) init() {
-	tx.manifest = tx.snapshot.manifest.Clone()
-	tx.buffer = new(ItemBuffer)
-	tx.createdSegments = make(chan *Segment)
+func (txn *Transaction) newBuffer() {
+}
+
+func (txn *Transaction) init() {
+	txn.manifest = txn.snapshot.manifest.Clone()
+	txn.buffer = new(ItemBuffer)
+	txn.createdSegments = make(chan *Segment)
 }
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
@@ -36,18 +38,13 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	}
 
 	if txn.buffer.Delete(docID) {
-		//log.Printf("deleted doc %v from the transaction buffer", docID)
+		debugLog.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
 	txn.buffer.Add(docID, terms)
-	//log.Printf("added doc %v to the transaction buffer", docID)
+	debugLog.Printf("added doc %v to the transaction buffer", docID)
 
-	if txn.buffer.NumItems() > MaxBufferedItems {
-		err := txn.Flush()
-		if err != nil {
-			return errors.Wrap(err, "flush failed")
-		}
-	}
+	txn.maybeFlush()
 
 	return nil
 }
@@ -58,11 +55,10 @@ func (txn *Transaction) Delete(docID uint32) error {
 	}
 
 	if txn.buffer.Delete(docID) {
-		//log.Printf("deleted doc %v from the transaction buffer", docID)
+		debugLog.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
 	txn.manifest.Delete(docID)
-
 	return nil
 }
 
@@ -74,7 +70,7 @@ func (txn *Transaction) DeleteAll() error {
 	txn.buffer.Reset()
 	txn.manifest.DeleteAll()
 
-	log.Print("removed all segments")
+	debugLog.Print("removed all segments")
 	return nil
 }
 
@@ -89,28 +85,14 @@ func (txn *Transaction) Import(stream ItemReader) error {
 	}
 
 	txn.manifest.AddSegment(segment)
+	debugLog.Printf("added imported segment %v", segment.ID)
 
-	//log.Printf("imported %v docs to segment %v", segment.Meta.NumDocs, segment.ID)
 	return nil
 }
 
-func (txn *Transaction) Flush() error {
-	if txn.Committed() {
-		return ErrCommitted
-	}
-
-	done := false
-	for !done {
-		select {
-		case segment := <-txn.createdSegments:
-			txn.manifest.AddSegment(segment)
-		default:
-			done = true
-		}
-	}
-
+func (txn *Transaction) flush() {
 	if txn.buffer.Empty() {
-		return nil
+		return
 	}
 
 	buffer := txn.buffer
@@ -124,8 +106,38 @@ func (txn *Transaction) Flush() error {
 		txn.createdSegments <- segment
 		return nil
 	})
+}
 
-	return nil
+func (txn *Transaction) maybeFlush() {
+	done := false
+	for !done {
+		select {
+		case segment := <-txn.createdSegments:
+			txn.manifest.AddSegment(segment)
+			debugLog.Printf("added asynchronously created segment %v", segment.ID)
+		default:
+			done = true
+		}
+	}
+
+	if txn.buffer.NumItems() > MaxBufferedItems {
+		txn.flush()
+	}
+}
+
+func (txn *Transaction) waitForWriters() error {
+	done := make(chan error)
+	go func() { done <- txn.writers.Err() }()
+
+	for {
+		select {
+		case segment := <-txn.createdSegments:
+			txn.manifest.AddSegment(segment)
+			debugLog.Printf("added asynchronously created segment %v", segment.ID)
+		case err := <-done:
+			return err
+		}
+	}
 }
 
 func (txn *Transaction) Commit() error {
@@ -133,23 +145,11 @@ func (txn *Transaction) Commit() error {
 		return ErrCommitted
 	}
 
-	err := txn.Flush()
+	txn.flush()
+
+	err := txn.waitForWriters()
 	if err != nil {
-		return errors.Wrap(err, "flush failed")
-	}
-
-	go func() {
-		txn.writers.Wait()
-		close(txn.createdSegments)
-	}()
-
-	for segment := range txn.createdSegments {
-		txn.manifest.AddSegment(segment)
-	}
-
-	err = txn.writers.Err()
-	if err != nil {
-		return errors.Wrap(err, "segment writer failed")
+		return errors.Wrap(err, "background bsegment writer failed")
 	}
 
 	return txn.db.commit(func(base *Manifest) (*Manifest, error) {
@@ -167,14 +167,25 @@ func (txn *Transaction) Committed() bool {
 	return txn.manifest.ID != 0
 }
 
-func (tx *Transaction) Close() error {
-	err1 := tx.close.Do(func() error { return tx.closeFn(tx) })
-	err2 := tx.snapshot.Close()
-	if err1 != nil {
-		return err1
-	}
-	if err2 != nil {
-		return err2
-	}
-	return nil
+func (txn *Transaction) Close() error {
+	return txn.close.Do(func() error {
+		var errs []error
+		var err error
+		err = txn.waitForWriters()
+		if err != nil {
+			errs = append(errs, err)
+		}
+		err = txn.snapshot.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+		err = txn.closeFn(txn)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			return errs[0]
+		}
+		return nil
+	})
 }
