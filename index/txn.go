@@ -18,12 +18,13 @@ type Transaction struct {
 	closeFn  func(tx *Transaction) error
 }
 
-const MaxBufferedItems = 1024 * 1024
+const MaxBufferedItems = 10 * 1024 * 1024
 
 var ErrCommitted = errors.New("transaction is already committed")
 
 func (tx *Transaction) init() {
 	tx.manifest = tx.snapshot.manifest.Clone()
+	tx.buffer.Reset()
 }
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
@@ -32,11 +33,11 @@ func (txn *Transaction) Add(docID uint32, terms []uint32) error {
 	}
 
 	if txn.buffer.Delete(docID) {
-		log.Printf("deleted doc %v from the transaction buffer", docID)
+		//log.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
 	txn.buffer.Add(docID, terms)
-	log.Printf("added doc %v to the transaction buffer", docID)
+	//log.Printf("added doc %v to the transaction buffer", docID)
 
 	if txn.buffer.NumItems() > MaxBufferedItems {
 		err := txn.Flush()

@@ -11,6 +11,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"runtime/pprof"
+	"unicode/utf8"
 )
 
 type block struct {
@@ -66,13 +68,91 @@ func parseInput(input io.Reader) <-chan block {
 	return ch
 }
 
+func splitPsqlCsv(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	for width, i := 0, 0; i < len(data); i += width {
+		var r rune
+		r, width = utf8.DecodeRune(data[i:])
+		switch r {
+		case '\t', '\n', ',', '{', '}':
+			if i == 0 {
+				return width, data[:width], nil
+			} else {
+				return i, data[:i], nil
+			}
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+func importPsqlCsv(idx *index.DB, r io.Reader) error {
+	tx, err := idx.Transaction()
+	if err != nil {
+		return errors.Wrap(err, "unable to start transaction")
+	}
+	defer tx.Close()
+
+	stream := bufio.NewReader(r)
+	var lastDocID uint32
+	for {
+		line, err := stream.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return errors.Wrap(err, "invalid input")
+		}
+		columns := strings.Split(line, "\t")
+		docID, err := strconv.ParseUint(columns[0], 10, 32)
+		if err != nil {
+			return errors.Wrapf(err, "invalid input")
+		}
+		termStrings := strings.Split(strings.Trim(columns[1], "{}\n"), ",")
+		terms := make([]uint32, len(termStrings))
+		for i, ts := range termStrings {
+			term, err := strconv.ParseInt(ts, 10, 32)
+			if err != nil {
+				return errors.Wrapf(err, "invalid input")
+			}
+			terms[i] = uint32(term)
+		}
+		lastDocID = uint32(docID)
+		tx.Add(lastDocID, terms)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return errors.Wrap(err, "commit failed")
+	}
+
+	return nil
+}
+
+func importText(idx *index.DB, r io.Reader) error {
+	reader := channelReader{ch: parseInput(r)}
+	return idx.Import(&reader)
+}
+
 func main() {
 	var dbPath = flag.String("dbpath", "", "path to the database directory")
+	var psql = flag.Bool("psql", false, "import fingerprints in the postgresql csv format")
+	var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 	flag.Parse()
 
 	if *dbPath == "" {
 		log.Fatal("no --dbpath specified")
+	}
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	fs, err := vfs.OpenDir(*dbPath, true)
@@ -87,8 +167,11 @@ func main() {
 	}
 	defer idx.Close()
 
-	reader := channelReader{ch: parseInput(os.Stdin)}
-	err = idx.Import(&reader)
+	if *psql {
+		err = importPsqlCsv(idx, os.Stdin)
+	} else {
+		err = importText(idx, os.Stdin)
+	}
 	if err != nil {
 		log.Fatalf("Import failed: %v", err)
 	}

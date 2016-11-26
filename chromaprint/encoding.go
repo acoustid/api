@@ -89,7 +89,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 			numValues++
 			if numValues == totalValues {
 				bits = bits[:bi+1]
-				offset += (len(bits)*3 + 8) / 8
+				offset += (len(bits)*3 + 7) / 8
 				break
 			}
 		} else if bit == 7 {
@@ -103,7 +103,7 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 
 	if numExceptionalBits > 0 {
 		exceptionalBits := util.UnpackUint5Slice(data[offset:])
-		if len(exceptionalBits) != numExceptionalBits {
+		if len(exceptionalBits) < numExceptionalBits {
 			return errors.New("not enough data to decode exceptional bits")
 		}
 		ei := 0
@@ -139,30 +139,31 @@ func unpackFingerprint(data []byte, fp *Fingerprint) error {
 }
 
 func CompressFingerprint(fp Fingerprint) []byte {
-	bits := make([]uint8, 0, len(fp.Hashes)*32)
+	normalBits := make([]uint8, 0, len(fp.Hashes)*32)
+	exceptionBits := make([]uint8, 0, len(fp.Hashes))
 	var lastBit uint8
 	var lastValue uint32
 	for _, h := range fp.Hashes {
 		value := h ^ lastValue
-		for i := uint8(0); i < 32; i++ {
-			if value&(1<<i) != 0 {
-				bit := i + 1
-				bits = append(bits, bit-lastBit)
+		var bit uint8 = 1
+		for value != 0 {
+			if value&1 != 0 {
+				b := bit - lastBit
+				if b >= 7 {
+					normalBits = append(normalBits, 7)
+					exceptionBits = append(exceptionBits, b-7)
+				} else {
+					normalBits = append(normalBits, b)
+				}
+
 				lastBit = bit
 			}
+			value >>= 1
+			bit++
 		}
-		bits = append(bits, 0)
+		normalBits = append(normalBits, 0)
 		lastBit = 0
 		lastValue = h
-	}
-
-	normalBits := bits[:]
-	exceptionBits := bits[len(bits):]
-	for i, b := range normalBits {
-		if b >= 7 {
-			exceptionBits = append(exceptionBits, normalBits[i]-7)
-			normalBits[i] = 7
-		}
 	}
 
 	normalBitsSize := (len(normalBits)*3 + 7) / 8

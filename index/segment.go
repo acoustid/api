@@ -182,15 +182,13 @@ func (s *Segment) Remove(fs vfs.FileSystem) error {
 	return nil
 }
 
-func (s *Segment) writeBlock(writer *bufio.Writer, input []Item) (n int, err error) {
+func (s *Segment) writeBlock(writer *bufio.Writer, input []Item, buf1 []byte, buf2 []byte) (n int, err error) {
 	n = len(input)
 	if n == 0 {
 		err = ErrNoData
 		return
 	}
 
-	buf1 := make([]byte, s.Meta.BlockSize)
-	buf2 := make([]byte, s.Meta.BlockSize)
 	ptr1, ptr2 := 0, 0
 
 	baseDocID := input[0].DocID
@@ -297,6 +295,9 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 
 	s.docs = intset.NewSparseBitSet(0)
 
+	buf1 := make([]byte, s.Meta.BlockSize)
+	buf2 := make([]byte, s.Meta.BlockSize)
+
 	maxItemsPerBlock := (s.Meta.BlockSize - BlockHeaderSize) / 2
 	remaining := make([]Item, 0, maxItemsPerBlock)
 	for {
@@ -306,7 +307,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		}
 		if len(block) == 0 {
 			for len(remaining) > 0 {
-				n, err := s.writeBlock(writer, remaining)
+				n, err := s.writeBlock(writer, remaining, buf1, buf2)
 				if err != nil {
 					return err
 				}
@@ -317,7 +318,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 		for len(remaining) > 0 && len(remaining)+len(block) >= maxItemsPerBlock {
 			m := len(remaining)
 			remaining = append(remaining, block[:maxItemsPerBlock-m:len(block)]...)
-			n, err := s.writeBlock(writer, remaining)
+			n, err := s.writeBlock(writer, remaining, buf1, buf2)
 			if err != nil {
 				return err
 			}
@@ -330,7 +331,7 @@ func (s *Segment) writeData(file io.Writer, it ItemReader) error {
 			}
 		}
 		for len(block) >= maxItemsPerBlock {
-			n, err := s.writeBlock(writer, block)
+			n, err := s.writeBlock(writer, block[:maxItemsPerBlock], buf1, buf2)
 			if err != nil {
 				return err
 			}

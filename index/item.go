@@ -4,9 +4,9 @@
 package index
 
 import (
-	"go4.org/sort"
+	"github.com/acoustid/go-acoustid/util/intset"
 	"io"
-	"math"
+	"sort"
 )
 
 // Items is one (term,docID) pair in the inverted index.
@@ -14,6 +14,14 @@ type Item struct {
 	Term  uint32
 	DocID uint32
 }
+
+type ItemSliceSortedByTerm []Item
+
+func (s ItemSliceSortedByTerm) Len() int { return len(s) }
+func (s ItemSliceSortedByTerm) Less(i, j int) bool {
+	return s[i].Term < s[j].Term || (s[i].Term == s[j].Term && s[i].DocID < s[j].DocID)
+}
+func (s ItemSliceSortedByTerm) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // ItemReader is an abstraction for iterating over Items by blocks.
 type ItemReader interface {
@@ -41,6 +49,7 @@ type ItemBuffer struct {
 	minDocID uint32
 	maxDocID uint32
 	items    []Item
+	docs     *intset.SparseBitSet
 }
 
 func (ib *ItemBuffer) NumDocs() int     { return ib.numDocs }
@@ -54,6 +63,7 @@ func (ib *ItemBuffer) Reset() {
 	ib.minDocID = 0
 	ib.maxDocID = 0
 	ib.items = ib.items[:0]
+	ib.docs = intset.NewSparseBitSet(0)
 }
 
 func (ib *ItemBuffer) Add(docID uint32, terms []uint32) {
@@ -67,11 +77,14 @@ func (ib *ItemBuffer) Add(docID uint32, terms []uint32) {
 	for _, term := range terms {
 		ib.items = append(ib.items, Item{DocID: docID, Term: term})
 	}
+	if ib.docs == nil {
+		ib.docs = intset.NewSparseBitSet(0)
+	}
+	ib.docs.Add(docID)
 }
 
 func (ib *ItemBuffer) Delete(docID uint32) bool {
-	// TODO optimize
-	if docID < ib.minDocID || docID > ib.maxDocID {
+	if !ib.docs.Contains(docID) {
 		return false
 	}
 
@@ -89,30 +102,16 @@ func (ib *ItemBuffer) Delete(docID uint32) bool {
 
 	ib.items = ib.items[:n]
 	ib.numDocs--
-	if docID == ib.minDocID || docID == ib.maxDocID {
-		ib.minDocID = 0
-		ib.maxDocID = 0
-		if ib.numDocs > 0 {
-			ib.minDocID = math.MaxUint32
-			for _, item := range ib.items {
-				if item.DocID < ib.minDocID {
-					ib.minDocID = item.DocID
-				}
-				if item.DocID > ib.maxDocID {
-					ib.maxDocID = item.DocID
-				}
-			}
-		}
-	}
+
+	ib.docs.Remove(docID)
+	ib.minDocID = ib.docs.Min()
+	ib.maxDocID = ib.docs.Max()
 
 	return true
 }
 
 func (ib *ItemBuffer) Reader() ItemReader {
-	items := ib.items
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Term < items[j].Term || (items[i].Term == items[j].Term && items[i].DocID < items[j].DocID)
-	})
+	sort.Sort(ItemSliceSortedByTerm(ib.items))
 	return &itemBufferReader{ib: ib}
 }
 
