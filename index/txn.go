@@ -10,12 +10,14 @@ import (
 )
 
 type Transaction struct {
-	snapshot *Snapshot
-	manifest *Manifest
-	db       *DB
-	buffer   ItemBuffer
-	close    syncutil.Once
-	closeFn  func(tx *Transaction) error
+	snapshot        *Snapshot
+	manifest        *Manifest
+	db              *DB
+	buffer          *ItemBuffer
+	close           syncutil.Once
+	closeFn         func(tx *Transaction) error
+	writers         syncutil.Group
+	createdSegments chan *Segment
 }
 
 const MaxBufferedItems = 10 * 1024 * 1024
@@ -24,7 +26,8 @@ var ErrCommitted = errors.New("transaction is already committed")
 
 func (tx *Transaction) init() {
 	tx.manifest = tx.snapshot.manifest.Clone()
-	tx.buffer.Reset()
+	tx.buffer = new(ItemBuffer)
+	tx.createdSegments = make(chan *Segment)
 }
 
 func (txn *Transaction) Add(docID uint32, terms []uint32) error {
@@ -55,7 +58,7 @@ func (txn *Transaction) Delete(docID uint32) error {
 	}
 
 	if txn.buffer.Delete(docID) {
-		log.Printf("deleted doc %v from the transaction buffer", docID)
+		//log.Printf("deleted doc %v from the transaction buffer", docID)
 	}
 
 	txn.manifest.Delete(docID)
@@ -87,7 +90,7 @@ func (txn *Transaction) Import(stream ItemReader) error {
 
 	txn.manifest.AddSegment(segment)
 
-	log.Printf("imported %v docs to segment %v", segment.Meta.NumDocs, segment.ID)
+	//log.Printf("imported %v docs to segment %v", segment.Meta.NumDocs, segment.ID)
 	return nil
 }
 
@@ -96,19 +99,32 @@ func (txn *Transaction) Flush() error {
 		return ErrCommitted
 	}
 
+	done := false
+	for !done {
+		select {
+		case segment := <-txn.createdSegments:
+			txn.manifest.AddSegment(segment)
+		default:
+			done = true
+		}
+	}
+
 	if txn.buffer.Empty() {
 		return nil
 	}
 
-	segment, err := txn.db.createSegment(txn.buffer.Reader())
-	if err != nil {
-		return errors.Wrap(err, "failed to create a new segment")
-	}
+	buffer := txn.buffer
+	txn.buffer = new(ItemBuffer)
 
-	txn.manifest.AddSegment(segment)
-	txn.buffer.Reset()
+	txn.writers.Go(func() error {
+		segment, err := txn.db.createSegment(buffer.Reader())
+		if err != nil {
+			return errors.Wrap(err, "failed to create a new segment")
+		}
+		txn.createdSegments <- segment
+		return nil
+	})
 
-	log.Printf("flushed %v docs from the transaction buffer to segment %v", segment.Meta.NumDocs, segment.ID)
 	return nil
 }
 
@@ -120,6 +136,20 @@ func (txn *Transaction) Commit() error {
 	err := txn.Flush()
 	if err != nil {
 		return errors.Wrap(err, "flush failed")
+	}
+
+	go func() {
+		txn.writers.Wait()
+		close(txn.createdSegments)
+	}()
+
+	for segment := range txn.createdSegments {
+		txn.manifest.AddSegment(segment)
+	}
+
+	err = txn.writers.Err()
+	if err != nil {
+		return errors.Wrap(err, "segment writer failed")
 	}
 
 	return txn.db.commit(func(base *Manifest) (*Manifest, error) {

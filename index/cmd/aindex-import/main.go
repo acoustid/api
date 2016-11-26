@@ -116,7 +116,7 @@ func importPsqlCsv(idx *index.DB, r io.Reader) error {
 			if err != nil {
 				return errors.Wrapf(err, "invalid input")
 			}
-			terms[i] = uint32(term)
+			terms[i] = uint32(term)>>(32-28)
 		}
 		lastDocID = uint32(docID)
 		tx.Add(lastDocID, terms)

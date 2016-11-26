@@ -84,7 +84,7 @@ func (ib *ItemBuffer) Add(docID uint32, terms []uint32) {
 }
 
 func (ib *ItemBuffer) Delete(docID uint32) bool {
-	if !ib.docs.Contains(docID) {
+	if ib.docs == nil || !ib.docs.Contains(docID) {
 		return false
 	}
 
