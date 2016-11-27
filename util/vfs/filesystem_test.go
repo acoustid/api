@@ -6,9 +6,9 @@ package vfs
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
 	"io/ioutil"
 	"testing"
+	"io"
 )
 
 func RunFileSystemTests(t *testing.T, testFn func(t *testing.T, fs FileSystem)) {

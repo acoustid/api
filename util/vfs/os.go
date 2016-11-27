@@ -96,7 +96,21 @@ func (fs *osFS) Remove(name string) error {
 }
 
 func (fs *osFS) OpenFile(name string) (InputFile, error) {
-	return os.Open(fs.Prefix(name))
+	file, err := os.Open(fs.Prefix(name))
+	if err != nil {
+		return nil, err
+	}
+	size, err := file.Seek(io.SeekEnd, 0)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	_, err = file.Seek(io.SeekStart, 0)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	return &osInputFile{File: file, size: size}, nil
 }
 
 func (fs *osFS) CreateFile(name string, overwrite bool) (OutputFile, error) {
@@ -111,4 +125,13 @@ func (fs *osFS) CreateFile(name string, overwrite bool) (OutputFile, error) {
 
 func (fs *osFS) CreateAtomicFile(name string) (AtomicOutputFile, error) {
 	return safefile.Create(fs.Prefix(name), 0666)
+}
+
+type osInputFile struct {
+	*os.File
+	size int64
+}
+
+func (f *osInputFile) Size() int64 {
+	return f.size
 }

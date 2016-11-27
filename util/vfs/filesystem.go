@@ -15,6 +15,7 @@ type InputFile interface {
 	io.ReaderAt
 	io.Seeker
 	io.Closer
+	Size() int64
 }
 
 type OutputFile interface {

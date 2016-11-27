@@ -229,6 +229,10 @@ func (f *memInputFile) Seek(offset int64, whence int) (int64, error) {
 	return pos, nil
 }
 
+func (f *memInputFile) Size() int64 {
+	return int64(len(f.data))
+}
+
 func (f *memInputFile) Close() error {
 	return nil
 }
