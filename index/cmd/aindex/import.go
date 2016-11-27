@@ -69,7 +69,7 @@ func readTextStream(input io.Reader) <-chan itemBlockWithErr {
 
 var importCommand = cli.Command{
 	Name:  "import",
-	Usage: "Import stream of terms into the index",
+	Usage: "Import a stream of term/docID pairs into the index",
 	Flags: []cli.Flag{
 		cli.StringFlag{Name: "dbpath", Usage: "path to the database directory"},
 	},
@@ -82,7 +82,10 @@ func runImport(ctx *cli.Context) error {
 		return errors.Wrap(err, "unable to open the database directory")
 	}
 
-	idx, err := index.Open(fs, true, nil)
+	opts := *index.DefaultOptions
+	opts.EnableAutoCompact = false
+
+	idx, err := index.Open(fs, true, &opts)
 	if err != nil {
 		return errors.Wrap(err, "unable to open the database")
 	}

@@ -16,7 +16,7 @@ import (
 
 var exportCommand = cli.Command{
 	Name:  "export",
-	Usage: "Export stream of terms from the index",
+	Usage: "Export all term/docID pairs from the index",
 	Flags: []cli.Flag{
 		cli.StringFlag{Name: "dbpath", Usage: "path to the database directory"},
 	},
@@ -29,7 +29,10 @@ func runExport(ctx *cli.Context) error {
 		return errors.Wrap(err, "unable to open the database directory")
 	}
 
-	idx, err := index.Open(fs, true, nil)
+	opts := *index.DefaultOptions
+	opts.EnableAutoCompact = false
+
+	idx, err := index.Open(fs, false, &opts)
 	if err != nil {
 		return errors.Wrap(err, "unable to open the database")
 	}

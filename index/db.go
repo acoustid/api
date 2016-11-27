@@ -83,7 +83,9 @@ func (db *DB) init(manifest *Manifest) {
 
 	db.closing = make(chan struct{})
 
-	db.bg.Go(db.autoCompact)
+	if db.opts.EnableAutoCompact {
+		db.bg.Go(db.autoCompact)
+	}
 
 	db.orphanedFiles = make(chan string, 16)
 	db.bg.Go(db.deleteOrphanedFiles)
@@ -120,7 +122,7 @@ func (db *DB) Compact() error {
 }
 
 func (db *DB) autoCompact() error {
-	interval := 10 * time.Second
+	interval := db.opts.AutoCompactInterval
 	log.Printf("scheduling auto-compact to run every %v", interval)
 	ticker := time.NewTicker(interval)
 	for {

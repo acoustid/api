@@ -29,6 +29,7 @@ func main() {
 		serverCommand,
 		importCommand,
 		exportCommand,
+		loadCommand,
 	}
 
 	app.Before = func(ctx *cli.Context) error {
@@ -50,8 +51,5 @@ func main() {
 		return nil
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Fatal(err)
-	}
+	app.RunAndExitOnError()
 }
