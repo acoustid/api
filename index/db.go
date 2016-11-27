@@ -48,7 +48,7 @@ type DB struct {
 	mergeRequests   chan chan error
 	mergePolicy     MergePolicy
 	bg              syncutil.Group
-	opts *Options
+	opts            *Options
 }
 
 func Open(fs vfs.FileSystem, create bool, opts *Options) (*DB, error) {

@@ -4,10 +4,10 @@
 package main
 
 import (
+	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v1"
 	"log"
 	"os"
-	"github.com/pkg/errors"
 	"runtime/pprof"
 )
 

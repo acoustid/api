@@ -1,18 +1,19 @@
 package main
 
 import (
-	"gopkg.in/urfave/cli.v1"
+	"bufio"
+	"encoding/json"
 	"github.com/acoustid/go-acoustid/index"
 	"github.com/acoustid/go-acoustid/util/vfs"
 	"github.com/pkg/errors"
+	"gopkg.in/urfave/cli.v1"
 	"io"
-	"bufio"
-	"strings"
-	"strconv"
 	"os"
+	"strconv"
+	"strings"
 )
 
-func loadCsv(input io.Reader, batch index.Batch) error {
+func loadCSV(input io.Reader, batch index.Batch) error {
 	stream := bufio.NewReader(input)
 	var lastDocID uint32
 	for {
@@ -35,7 +36,7 @@ func loadCsv(input io.Reader, batch index.Batch) error {
 			if err != nil {
 				return errors.Wrapf(err, "invalid input")
 			}
-			terms[i] = uint32(term)>>(32-28)
+			terms[i] = uint32(term) >> (32 - 28)
 		}
 		lastDocID = uint32(docID)
 		err = batch.Add(lastDocID, terms)
@@ -44,6 +45,24 @@ func loadCsv(input io.Reader, batch index.Batch) error {
 		}
 	}
 	return nil
+}
+
+func loadJSON(input io.Reader, batch index.Batch) error {
+	decoder := json.NewDecoder(input)
+	for {
+		var doc index.Doc
+		err := decoder.Decode(&doc)
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return errors.Wrap(err, "invalid input")
+		}
+		err = batch.Add(doc.ID, doc.Terms)
+		if err != nil {
+			return errors.Wrap(err, "add failed")
+		}
+	}
 }
 
 var loadCommand = cli.Command{
@@ -81,7 +100,9 @@ func runLoad(ctx *cli.Context) error {
 	fmt := ctx.String("fmt")
 	switch fmt {
 	case "csv":
-		loader = loadCsv
+		loader = loadCSV
+	case "json":
+		loader = loadJSON
 	case "":
 		return errors.New("input format not specified")
 	default:

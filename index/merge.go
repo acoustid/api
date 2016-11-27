@@ -6,12 +6,12 @@ package index
 import (
 	"bytes"
 	"fmt"
-	"go4.org/sort"
-	"math"
-	"log"
-	"strings"
-	"github.com/pkg/errors"
 	"github.com/acoustid/go-acoustid/util/intset"
+	"github.com/pkg/errors"
+	"go4.org/sort"
+	"log"
+	"math"
+	"strings"
 )
 
 // Merge provides information necessary to perform a merge operation, resulting in one new segment.
@@ -39,7 +39,7 @@ func (m Merge) String() string {
 }
 
 func (m *Merge) Run(db *DB) error {
-	sort.Slice(m.Segments, func (i, j int) bool {
+	sort.Slice(m.Segments, func(i, j int) bool {
 		return m.Segments[i].ID < m.Segments[j].ID
 	})
 

@@ -1,17 +1,17 @@
 package main
 
 import (
-	"gopkg.in/urfave/cli.v1"
-	"log"
 	"github.com/acoustid/go-acoustid/index"
-	"net"
-	"strconv"
 	"github.com/acoustid/go-acoustid/index/server"
 	"github.com/acoustid/go-acoustid/util/vfs"
+	"gopkg.in/urfave/cli.v1"
+	"log"
+	"net"
+	"strconv"
 )
 
 var serverCommand = cli.Command{
-	Name: "server",
+	Name:  "server",
 	Usage: "Runs the index server",
 	Flags: []cli.Flag{
 		cli.StringFlag{Name: "host", Value: "localhost", Usage: "address on which to listen"},

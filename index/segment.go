@@ -449,7 +449,7 @@ func (s *Segment) ReadBlock(i int, buf *segmentBlockBuffers) ([]Item, error) {
 	if cap(buf.items) >= numItems {
 		buf.items = buf.items[:numItems]
 	} else {
-		buf.items = make([]Item, numItems, numItems + numItems /4)
+		buf.items = make([]Item, numItems, numItems+numItems/4)
 	}
 	items := buf.items
 
