@@ -17,7 +17,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Name = "aindex"
-	app.HelpName = os.Args[0]
+	app.HelpName = "aindex"
 	app.Usage = "AcoustID audio fingerprint index"
 	app.Version = version
 

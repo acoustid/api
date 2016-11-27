@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-func parseCsv(input io.Reader, docs chan index.Doc, quit chan struct{}) error {
+func loadCsv(input io.Reader, batch index.Batch) error {
 	stream := bufio.NewReader(input)
 	var lastDocID uint32
 	for {
@@ -38,10 +38,9 @@ func parseCsv(input io.Reader, docs chan index.Doc, quit chan struct{}) error {
 			terms[i] = uint32(term)>>(32-28)
 		}
 		lastDocID = uint32(docID)
-		select {
-		case docs <- index.Doc{ID: lastDocID, Terms: terms}:
-		case <-quit:
-			return nil
+		err = batch.Add(lastDocID, terms)
+		if err != nil {
+			return errors.Wrap(err, "add failed")
 		}
 	}
 	return nil
@@ -77,47 +76,27 @@ func runLoad(ctx *cli.Context) error {
 	}
 	defer idx.Close()
 
-	docs := make(chan index.Doc)
-	quit := make(chan struct{}, 1)
-
-	defer func() {
-		quit <- struct{}{}
-	}()
-
-	var parserErr error
-	var parser func(input io.Reader, docs chan index.Doc, quit chan struct{}) error
+	var loader func(input io.Reader, batch index.Batch) error
 
 	fmt := ctx.String("fmt")
 	switch fmt {
 	case "csv":
-		parser = parseCsv
+		loader = loadCsv
 	case "":
 		return errors.New("input format not specified")
 	default:
 		return errors.Errorf("unknown format %v", fmt)
 	}
 
-	go func() {
-		parserErr = parser(os.Stdin, docs, quit)
-		close(docs)
-	}()
-
 	txn, err := idx.Transaction()
 	if err != nil {
-		quit <- struct{}{}
 		return errors.Wrap(err, "unable to start a transaction")
 	}
 	defer txn.Close()
 
-	for doc := range docs {
-		err = txn.Add(doc.ID, doc.Terms)
-		if err != nil {
-			return errors.Wrap(err, "add failed")
-		}
-	}
-
-	if parserErr != nil {
-		return errors.Wrap(parserErr, "parser failed")
+	err = loader(os.Stdin, txn)
+	if err != nil {
+		return errors.Wrap(err, "load failed")
 	}
 
 	err = txn.Commit()
