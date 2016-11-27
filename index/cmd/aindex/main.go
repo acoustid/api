@@ -4,51 +4,26 @@
 package main
 
 import (
-	"flag"
-	"github.com/acoustid/go-acoustid/index"
-	"github.com/acoustid/go-acoustid/index/server"
-	"github.com/acoustid/go-acoustid/util/vfs"
+	"gopkg.in/urfave/cli.v1"
 	"log"
-	"net"
-	"strconv"
+	"os"
 )
 
 func main() {
-	var (
-		hostOpt   = flag.String("host", "localhost", "host on which to listen")
-		portOpt   = flag.Int("port", 7765, "port number on which to listen")
-		dbPathOpt = flag.String("dbpath", "", "path to the database directory")
-	)
-
-	flag.Parse()
-
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-
-	var fs vfs.FileSystem
-	if *dbPathOpt == "" {
-		fs = vfs.CreateMemDir()
-	} else {
-		var err error
-		fs, err = vfs.OpenDir(*dbPathOpt, true)
-		if err != nil {
-			log.Fatalf("Failed to open the database directory: %v", err)
-		}
+	app := cli.NewApp()
+	app.Name = "aindex"
+	app.HelpName = os.Args[0]
+	app.Usage = "AcoustID audio fingerprint index"
+	app.HideVersion = true
+	app.Commands = []cli.Command{
+		serverCommand,
 	}
-
-	opts := *index.DefaultOptions
-
-	log.Printf("Opening database in %v", fs)
-	idx, err := index.Open(fs, true, &opts)
-	if err != nil {
-		log.Fatalf("Failed to open the database: %v", err)
+	app.Before = func(ctx *cli.Context) error {
+		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+		return nil
 	}
-	defer idx.Close()
-
-	addr := net.JoinHostPort(*hostOpt, strconv.Itoa(*portOpt))
-	log.Printf("Listening on %v", addr)
-
-	err = server.ListenAndServe(addr, idx)
+	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatalf("Failed to start the server: %v", err)
+		log.Fatal(err)
 	}
 }
