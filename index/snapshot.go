@@ -48,6 +48,15 @@ func (s *Snapshot) Search(query []uint32) (map[uint32]int, error) {
 	return hits, nil
 }
 
+// Reader creates an ItemReader that iterates over all items in the index.
+func (s *Snapshot) Reader() ItemReader {
+	var readers []ItemReader
+	for _, segment := range s.manifest.Segments {
+		readers = append(readers, segment.Reader())
+	}
+	return MergeItemReaders(readers...)
+}
+
 func (s *Snapshot) Close() error {
 	return s.close.Do(func() error { return s.closeFn(s) })
 }

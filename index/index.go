@@ -12,6 +12,8 @@ import "io"
 type Searcher interface {
 	io.Closer
 
+	Reader() ItemReader
+
 	Search(terms []uint32) (map[uint32]int, error)
 }
 

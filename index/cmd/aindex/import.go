@@ -1,3 +1,6 @@
+// Copyright (C) 2016  Lukas Lalinsky
+// Distributed under the MIT license, see the LICENSE file for details.
+
 package main
 
 import (
@@ -11,13 +14,13 @@ import (
 	"strconv"
 )
 
-type block struct {
+type itemBlockWithErr struct {
 	items []index.Item
 	err   error
 }
 
 type channelReader struct {
-	ch <-chan block
+	ch <-chan itemBlockWithErr
 }
 
 func (r *channelReader) ReadBlock() ([]index.Item, error) {
@@ -28,8 +31,8 @@ func (r *channelReader) ReadBlock() ([]index.Item, error) {
 	return block.items, block.err
 }
 
-func readTextStream(input io.Reader) <-chan block {
-	ch := make(chan block, 1)
+func readTextStream(input io.Reader) <-chan itemBlockWithErr {
+	ch := make(chan itemBlockWithErr, 1)
 	go func() {
 		defer close(ch)
 		stream := bufio.NewScanner(input)
@@ -38,27 +41,27 @@ func readTextStream(input io.Reader) <-chan block {
 			items := make([]index.Item, 1024)
 			for i := range items {
 				if !stream.Scan() {
-					ch <- block{items: items[:i]}
+					ch <- itemBlockWithErr{items: items[:i]}
 					return
 				}
 				term, err := strconv.ParseUint(stream.Text(), 10, 32)
 				if err != nil {
-					ch <- block{err: errors.Wrap(err, "invalid term")}
+					ch <- itemBlockWithErr{err: errors.Wrap(err, "invalid term")}
 					return
 				}
 				if !stream.Scan() {
-					ch <- block{err: errors.New("invalid input, missing docID")}
+					ch <- itemBlockWithErr{err: errors.New("invalid input, missing docID")}
 					return
 				}
 				docID, err := strconv.ParseUint(stream.Text(), 10, 32)
 				if err != nil {
-					ch <- block{err: errors.Wrap(err, "invalid docID")}
+					ch <- itemBlockWithErr{err: errors.Wrap(err, "invalid docID")}
 					return
 				}
 				items[i].Term = uint32(term)
 				items[i].DocID = uint32(docID)
 			}
-			ch <- block{items: items}
+			ch <- itemBlockWithErr{items: items}
 		}
 	}()
 	return ch

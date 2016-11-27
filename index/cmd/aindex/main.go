@@ -28,6 +28,7 @@ func main() {
 	app.Commands = []cli.Command{
 		serverCommand,
 		importCommand,
+		exportCommand,
 	}
 
 	app.Before = func(ctx *cli.Context) error {
