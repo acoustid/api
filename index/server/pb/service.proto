@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "pb";
+
+service Index {
+    rpc Search(SearchRequest) returns (SearchReply) {}
+}
+
+message SearchRequest {
+    string name = 1;
+}
+
+message SearchReply {
+    string result = 1;
+}

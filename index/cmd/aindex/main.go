@@ -27,6 +27,7 @@ func main() {
 
 	app.Commands = []cli.Command{
 		serverCommand,
+		server2Command,
 		importCommand,
 		exportCommand,
 		loadCommand,
