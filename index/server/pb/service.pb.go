@@ -11,6 +11,8 @@ It is generated from these files:
 It has these top-level messages:
 	SearchRequest
 	SearchReply
+	UpdateRequest
+	UpdateReply
 */
 package pb
 
@@ -35,7 +37,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type SearchRequest struct {
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Terms []uint32 `protobuf:"varint,1,rep,packed,name=terms" json:"terms,omitempty"`
 }
 
 func (m *SearchRequest) Reset()                    { *m = SearchRequest{} }
@@ -43,15 +45,15 @@ func (m *SearchRequest) String() string            { return proto.CompactTextStr
 func (*SearchRequest) ProtoMessage()               {}
 func (*SearchRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *SearchRequest) GetName() string {
+func (m *SearchRequest) GetTerms() []uint32 {
 	if m != nil {
-		return m.Name
+		return m.Terms
 	}
-	return ""
+	return nil
 }
 
 type SearchReply struct {
-	Result string `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Hits []*SearchReply_Hit `protobuf:"bytes,1,rep,name=hits" json:"hits,omitempty"`
 }
 
 func (m *SearchReply) Reset()                    { *m = SearchReply{} }
@@ -59,16 +61,100 @@ func (m *SearchReply) String() string            { return proto.CompactTextStrin
 func (*SearchReply) ProtoMessage()               {}
 func (*SearchReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-func (m *SearchReply) GetResult() string {
+func (m *SearchReply) GetHits() []*SearchReply_Hit {
 	if m != nil {
-		return m.Result
+		return m.Hits
 	}
-	return ""
+	return nil
 }
+
+type SearchReply_Hit struct {
+	Id    uint32 `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
+	Score uint32 `protobuf:"varint,2,opt,name=score" json:"score,omitempty"`
+}
+
+func (m *SearchReply_Hit) Reset()                    { *m = SearchReply_Hit{} }
+func (m *SearchReply_Hit) String() string            { return proto.CompactTextString(m) }
+func (*SearchReply_Hit) ProtoMessage()               {}
+func (*SearchReply_Hit) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1, 0} }
+
+func (m *SearchReply_Hit) GetId() uint32 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+func (m *SearchReply_Hit) GetScore() uint32 {
+	if m != nil {
+		return m.Score
+	}
+	return 0
+}
+
+type UpdateRequest struct {
+	DocsToAdd    []*UpdateRequest_Doc `protobuf:"bytes,1,rep,name=docsToAdd" json:"docsToAdd,omitempty"`
+	DocsToDelete []uint32             `protobuf:"varint,2,rep,packed,name=docsToDelete" json:"docsToDelete,omitempty"`
+}
+
+func (m *UpdateRequest) Reset()                    { *m = UpdateRequest{} }
+func (m *UpdateRequest) String() string            { return proto.CompactTextString(m) }
+func (*UpdateRequest) ProtoMessage()               {}
+func (*UpdateRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *UpdateRequest) GetDocsToAdd() []*UpdateRequest_Doc {
+	if m != nil {
+		return m.DocsToAdd
+	}
+	return nil
+}
+
+func (m *UpdateRequest) GetDocsToDelete() []uint32 {
+	if m != nil {
+		return m.DocsToDelete
+	}
+	return nil
+}
+
+type UpdateRequest_Doc struct {
+	Id    uint32   `protobuf:"varint,1,opt,name=id" json:"id,omitempty"`
+	Terms []uint32 `protobuf:"varint,2,rep,packed,name=terms" json:"terms,omitempty"`
+}
+
+func (m *UpdateRequest_Doc) Reset()                    { *m = UpdateRequest_Doc{} }
+func (m *UpdateRequest_Doc) String() string            { return proto.CompactTextString(m) }
+func (*UpdateRequest_Doc) ProtoMessage()               {}
+func (*UpdateRequest_Doc) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2, 0} }
+
+func (m *UpdateRequest_Doc) GetId() uint32 {
+	if m != nil {
+		return m.Id
+	}
+	return 0
+}
+
+func (m *UpdateRequest_Doc) GetTerms() []uint32 {
+	if m != nil {
+		return m.Terms
+	}
+	return nil
+}
+
+type UpdateReply struct {
+}
+
+func (m *UpdateReply) Reset()                    { *m = UpdateReply{} }
+func (m *UpdateReply) String() string            { return proto.CompactTextString(m) }
+func (*UpdateReply) ProtoMessage()               {}
+func (*UpdateReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
 func init() {
 	proto.RegisterType((*SearchRequest)(nil), "SearchRequest")
 	proto.RegisterType((*SearchReply)(nil), "SearchReply")
+	proto.RegisterType((*SearchReply_Hit)(nil), "SearchReply.Hit")
+	proto.RegisterType((*UpdateRequest)(nil), "UpdateRequest")
+	proto.RegisterType((*UpdateRequest_Doc)(nil), "UpdateRequest.Doc")
+	proto.RegisterType((*UpdateReply)(nil), "UpdateReply")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -82,6 +168,7 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Index service
 
 type IndexClient interface {
+	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateReply, error)
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchReply, error)
 }
 
@@ -91,6 +178,15 @@ type indexClient struct {
 
 func NewIndexClient(cc *grpc.ClientConn) IndexClient {
 	return &indexClient{cc}
+}
+
+func (c *indexClient) Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateReply, error) {
+	out := new(UpdateReply)
+	err := grpc.Invoke(ctx, "/Index/Update", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *indexClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchReply, error) {
@@ -105,11 +201,30 @@ func (c *indexClient) Search(ctx context.Context, in *SearchRequest, opts ...grp
 // Server API for Index service
 
 type IndexServer interface {
+	Update(context.Context, *UpdateRequest) (*UpdateReply, error)
 	Search(context.Context, *SearchRequest) (*SearchReply, error)
 }
 
 func RegisterIndexServer(s *grpc.Server, srv IndexServer) {
 	s.RegisterService(&_Index_serviceDesc, srv)
+}
+
+func _Index_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/Index/Update",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexServer).Update(ctx, req.(*UpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Index_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -135,6 +250,10 @@ var _Index_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*IndexServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Update",
+			Handler:    _Index_Update_Handler,
+		},
+		{
 			MethodName: "Search",
 			Handler:    _Index_Search_Handler,
 		},
@@ -146,14 +265,22 @@ var _Index_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("service.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 134 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2d, 0x4e, 0x2d, 0x2a,
-	0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x57, 0x52, 0xe6, 0xe2, 0x0d, 0x4e, 0x4d,
-	0x2c, 0x4a, 0xce, 0x08, 0x4a, 0x2d, 0x2c, 0x4d, 0x2d, 0x2e, 0x11, 0x12, 0xe2, 0x62, 0xc9, 0x4b,
-	0xcc, 0x4d, 0x95, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x02, 0xb3, 0x95, 0x54, 0xb9, 0xb8, 0x61,
-	0x8a, 0x0a, 0x72, 0x2a, 0x85, 0xc4, 0xb8, 0xd8, 0x8a, 0x52, 0x8b, 0x4b, 0x73, 0x4a, 0xa0, 0x8a,
-	0xa0, 0x3c, 0x23, 0x43, 0x2e, 0x56, 0xcf, 0xbc, 0x94, 0xd4, 0x0a, 0x21, 0x0d, 0x2e, 0x36, 0x88,
-	0x7a, 0x21, 0x3e, 0x3d, 0x14, 0xd3, 0xa5, 0x78, 0xf4, 0x90, 0x0c, 0x52, 0x62, 0x70, 0x62, 0x89,
-	0x62, 0x2a, 0x48, 0x4a, 0x62, 0x03, 0xbb, 0xc5, 0x18, 0x10, 0x00, 0x00, 0xff, 0xff, 0x7b, 0xf3,
-	0x5a, 0xab, 0x9c, 0x00, 0x00, 0x00,
+	// 262 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x6c, 0x51, 0xcb, 0x4a, 0xc4, 0x30,
+	0x14, 0x9d, 0x76, 0x1e, 0xe0, 0x6d, 0x53, 0x24, 0xb8, 0x28, 0x5d, 0x0d, 0x41, 0xa1, 0x20, 0x04,
+	0x19, 0xbf, 0x40, 0xe9, 0x62, 0xdc, 0x56, 0xdd, 0xe8, 0xc6, 0x99, 0xe4, 0xc2, 0x04, 0xaa, 0x89,
+	0x49, 0x14, 0xe7, 0x37, 0xfc, 0x62, 0x49, 0x63, 0xb1, 0x05, 0x97, 0xe7, 0xdc, 0x13, 0xce, 0x23,
+	0x40, 0x1c, 0xda, 0x4f, 0x25, 0x90, 0x1b, 0xab, 0xbd, 0x66, 0x17, 0x40, 0xee, 0x71, 0x67, 0xc5,
+	0xa1, 0xc5, 0xf7, 0x0f, 0x74, 0x9e, 0x9e, 0xc1, 0xd2, 0xa3, 0x7d, 0x75, 0x65, 0xb2, 0x9e, 0xd7,
+	0xa4, 0x8d, 0x80, 0xbd, 0x40, 0x36, 0xc8, 0x4c, 0x77, 0xa4, 0xe7, 0xb0, 0x38, 0x28, 0x1f, 0x35,
+	0xd9, 0xe6, 0x94, 0x8f, 0x6e, 0x7c, 0xab, 0x7c, 0xdb, 0x5f, 0xab, 0x4b, 0x98, 0x6f, 0x95, 0xa7,
+	0x05, 0xa4, 0x4a, 0x96, 0xc9, 0x3a, 0xa9, 0x49, 0x9b, 0x2a, 0x19, 0x1c, 0x9c, 0xd0, 0x16, 0xcb,
+	0xb4, 0xa7, 0x22, 0x60, 0xdf, 0x09, 0x90, 0x47, 0x23, 0x77, 0x1e, 0x87, 0x24, 0x57, 0x70, 0x22,
+	0xb5, 0x70, 0x0f, 0xfa, 0x46, 0xca, 0x5f, 0x27, 0xca, 0x27, 0x12, 0xde, 0x68, 0xd1, 0xfe, 0x89,
+	0x28, 0x83, 0x3c, 0x82, 0x06, 0x3b, 0xf4, 0xc1, 0x20, 0x54, 0x98, 0x70, 0x21, 0x54, 0xa3, 0xc5,
+	0x7f, 0xa1, 0x62, 0xed, 0x74, 0x5c, 0x9b, 0x40, 0x36, 0x18, 0x9a, 0xee, 0xb8, 0x79, 0x86, 0xe5,
+	0xdd, 0x9b, 0xc4, 0x2f, 0x5a, 0xc3, 0x2a, 0xf2, 0xb4, 0x98, 0x26, 0xaa, 0x72, 0x3e, 0x7a, 0xc0,
+	0x66, 0x41, 0x19, 0xc7, 0xa1, 0x05, 0x9f, 0x0c, 0x5d, 0xe5, 0xe3, 0xd5, 0xd8, 0xec, 0x76, 0xf1,
+	0x94, 0x9a, 0xfd, 0x7e, 0xd5, 0x7f, 0xcb, 0xf5, 0x4f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x30, 0xe0,
+	0xf0, 0x84, 0xa7, 0x01, 0x00, 0x00,
 }

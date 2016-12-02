@@ -3,13 +3,29 @@ syntax = "proto3";
 option go_package = "pb";
 
 service Index {
+    rpc Update(UpdateRequest) returns (UpdateReply) {}
     rpc Search(SearchRequest) returns (SearchReply) {}
 }
 
 message SearchRequest {
-    string name = 1;
+    repeated uint32 terms = 1;
 }
 
 message SearchReply {
-    string result = 1;
+    message Hit {
+        uint32 id = 1;
+        uint32 score = 2;
+    }
+    repeated Hit hits = 1;
 }
+
+message UpdateRequest {
+    message Doc {
+        uint32 id = 1;
+        repeated uint32 terms = 2;
+    }
+    repeated Doc docsToAdd = 1;
+    repeated uint32 docsToDelete = 2;
+}
+
+message UpdateReply {}
