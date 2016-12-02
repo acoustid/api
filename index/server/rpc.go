@@ -6,7 +6,6 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
