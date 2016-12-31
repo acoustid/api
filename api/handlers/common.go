@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/pkg/errors"
 	"net/http"
 	"net/url"
 )
@@ -39,7 +40,7 @@ func MarshalResponse(response interface{}, format ResponseFormat) ([]byte, error
 	case XmlFormat:
 		return xml.Marshal(response)
 	}
-	return nil, fmt.Errorf("unsupported format")
+	return nil, errors.New("unsupported format")
 }
 
 func WriteResponse(w http.ResponseWriter, status int, response interface{}, format ResponseFormat) {

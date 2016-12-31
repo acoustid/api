@@ -12,10 +12,43 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"github.com/pkg/errors"
+	"time"
 )
 
-type SubmitHandler struct {
+type SubmissionStore interface {
+	InsertSubmissions(s []Submission) error
+	Close()
+}
+
+type MongoSubmissionStore struct {
 	session *mgo.Session
+}
+
+func NewMongoSubmissionStore(session *mgo.Session) *MongoSubmissionStore {
+	return &MongoSubmissionStore{session: session.Clone()}
+}
+
+func (s *MongoSubmissionStore) InsertSubmissions(submissions []Submission) error {
+	collection := "submission_" + time.Now().Format("2006_01")
+	bulk := s.session.DB("").C(collection).Bulk()
+	for _, submission := range submissions {
+		bulk.Insert(submission)
+	}
+	_, err := bulk.Run()
+	if err != nil {
+		return err
+	}
+	log.Printf("inserted %d submission(s) to %s\n", len(submissions), collection)
+	return nil
+}
+
+func (s *MongoSubmissionStore) Close() {
+	s.session.Close()
+}
+
+type SubmitHandler struct {
+	submissionStore SubmissionStore
 }
 
 type SubmitResponse struct {
@@ -37,36 +70,43 @@ type Submission struct {
 	DiscNo      int    `bson:",omitempty"`
 }
 
+func getIntOrZero(s string) int {
+	i, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return int(i)
+}
+
 func parseSubmission(values url.Values, suffix string) (*Submission, error) {
 	fingerprintString := values.Get("fingerprint" + suffix)
 	if fingerprintString == "" {
-		return nil, fmt.Errorf("empty fingerprint")
+		return nil, errors.New("empty fingerprint")
 	}
 	fingerprint, err := chromaprint.DecodeFingerprintString(fingerprintString)
 	if err != nil {
 		return nil, fmt.Errorf("fingerprint is not a base64-encoded string (%s)", err)
 	}
 	if !chromaprint.ValidateFingerprint(fingerprint) {
-		return nil, fmt.Errorf("invalid fingerprint")
+		return nil, errors.New("invalid fingerprint")
 	}
 
-	durationString := values.Get("duration" + suffix)
-	if durationString == "" {
-		return nil, fmt.Errorf("empty duration")
-	}
-	duration, err := strconv.ParseInt(durationString, 10, 32)
-	if err != nil || duration <= 0 {
-		return nil, fmt.Errorf("invalid duration")
+	duration := getIntOrZero(values.Get("duration" + suffix))
+	if duration <= 0 {
+		return nil, errors.New("invalid duration")
 	}
 
 	submission := &Submission{
 		Fingerprint: fingerprint,
-		Duration:    int(duration),
+		Duration:    duration,
 		MBID:        values.Get("mbid" + suffix),
 		Title:       values.Get("track" + suffix),
 		Artist:      values.Get("artist" + suffix),
 		Album:       values.Get("album" + suffix),
 		AlbumArtist: values.Get("albumartist" + suffix),
+		Year:        getIntOrZero(values.Get("year" + suffix)),
+		TrackNo:     getIntOrZero(values.Get("trackno" + suffix)),
+		DiscNo:      getIntOrZero(values.Get("discno" + suffix)),
 	}
 
 	return submission, nil
@@ -83,6 +123,10 @@ func parseSubmissions(values url.Values) ([]Submission, error) {
 		}
 	}
 
+	if len(suffixes) == 0 {
+		suffixes = append(suffixes, "")
+	}
+
 	submissions := make([]Submission, 0, len(suffixes))
 	for _, suffix := range suffixes {
 		submission, err := parseSubmission(values, suffix)
@@ -94,17 +138,18 @@ func parseSubmissions(values url.Values) ([]Submission, error) {
 	return submissions, nil
 }
 
-func NewSubmitHandler(session *mgo.Session) *SubmitHandler {
+func NewSubmitHandler(submissionStore SubmissionStore) *SubmitHandler {
 	return &SubmitHandler{
-		session: session,
+		submissionStore: submissionStore,
 	}
 }
 
 func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	session := h.session.Copy()
-	defer session.Close()
-
-	r.ParseForm()
+	err := r.ParseForm()
+	if err != nil {
+		WriteResponse(w, http.StatusBadRequest, NewErrorResponse(err.Error(), 1), JsonFormat)
+		return
+	}
 
 	format, err := parseResponseFormat(r.Form, JsonFormat|XmlFormat)
 	if err != nil {
@@ -118,17 +163,15 @@ func (h *SubmitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("have %d submissions\n", len(submissions))
-
-	bulk := session.DB("").C("submission").Bulk()
-	for _, submission := range submissions {
-		bulk.Insert(submission)
-	}
-	_, err = bulk.Run()
+	err = h.submissionStore.InsertSubmissions(submissions)
 	if err != nil {
-		fmt.Fprintf(w, "%s", err)
+		WriteResponse(w, http.StatusInternalServerError, NewErrorResponse(err.Error(), 1), format)
 		return
 	}
 
 	WriteResponse(w, http.StatusOK, SubmitResponse{Status: "ok"}, format)
+}
+
+func (h *SubmitHandler) Close() {
+	h.submissionStore.Close()
 }

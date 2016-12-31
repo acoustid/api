@@ -28,10 +28,10 @@ func main() {
 	defer session.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Nothing to see here.\n")
+		fmt.Fprint(w, "Nothing to see here.\n")
 	})
 
-	http.Handle("/v2/submit", handlers.NewSubmitHandler(session))
+	http.Handle("/v2/submit", handlers.NewSubmitHandler(handlers.NewMongoSubmissionStore(session)))
 	http.Handle("/v2/lookup", handlers.NewLookupHandler(session))
 
 	var addr = fmt.Sprintf("%s:%d", *host, *port)
