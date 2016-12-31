@@ -4,16 +4,12 @@
 package handlers
 
 import (
-	"testing"
-	"os"
-	"gopkg.in/mgo.v2/dbtest"
-	"io/ioutil"
-	"log"
-	"net/http/httptest"
-	"github.com/stretchr/testify/assert"
 	"bytes"
+	"github.com/stretchr/testify/assert"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"testing"
 )
 
 type MockSubmissionStore struct {
@@ -25,31 +21,12 @@ func (s *MockSubmissionStore) InsertSubmissions(submissions []Submission) error 
 	return nil
 }
 
-func (s *MockSubmissionStore) Close() { }
-
-var dbServer dbtest.DBServer
-
-func TestMain(m *testing.M) {
-	tempDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		log.Fatalf("unable to create temporary directory for a database: %v", err)
-	}
-
-	dbServer.SetPath(tempDir)
-
-	exitCode := m.Run()
-
-	dbServer.Stop()
-	os.RemoveAll(tempDir)
-
-	os.Exit(exitCode)
-}
+func (s *MockSubmissionStore) Close() {}
 
 func TestSubmitHandler(t *testing.T) {
-	dbSession := dbServer.Session()
-	defer dbSession.Close()
+	submissionStore := &MockSubmissionStore{}
 
-	handler := NewSubmitHandler(NewMongoSubmissionStore(dbSession))
+	handler := NewSubmitHandler(submissionStore)
 	defer handler.Close()
 
 	data := url.Values{}
@@ -68,4 +45,6 @@ func TestSubmitHandler(t *testing.T) {
 
 	assert.Equal(t, 200, response.Code, "status code should be 200 OK")
 	assert.JSONEq(t, `{"status": "ok"}`, response.Body.String(), "unexpected response")
+
+	assert.Len(t, submissionStore.submissions, 1)
 }
