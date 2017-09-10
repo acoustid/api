@@ -6,6 +6,7 @@ package chromaprint
 import (
 	"encoding/base64"
 	"encoding/binary"
+
 	"github.com/acoustid/go-acoustid/util"
 	"github.com/pkg/errors"
 )
