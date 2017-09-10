@@ -1,15 +1,24 @@
 image: golang:latest
 
 before_script:
-  - mkdir -p /go/src/github.com/acoustid
-  - ln -s $CI_PROJECT_DIR /go/src/github.com/acoustid/go-acoustid
-  - cd /go/src/github.com/acoustid/go-acoustid/
+  - mkdir -p $GOPATH/src/github.com/acoustid
+  - ln -s $CI_PROJECT_DIR $GOPATH/src/github.com/acoustid/go-acoustid
+  - cd $GOPATH/src/github.com/acoustid/go-acoustid/
+
+stages:
+  - test
+  - build
 
 test:
   stage: test
   script:
-    - PACKAGES=$(go list ./... | grep -v '/vendor/')
-    - go build $PACKAGES
-    - go test -v $PACKAGES
+    - make check
+  tags:
+    - docker
+
+build:
+  stage: build
+  script:
+    - make build
   tags:
     - docker
