@@ -64,7 +64,7 @@ type FileSystem interface {
 }
 
 var (
-	errLocked = errors.New("already locked")
+	errLocked    = errors.New("already locked")
 	errCommitted = errors.New("already committed")
 )
 

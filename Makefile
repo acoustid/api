@@ -13,6 +13,9 @@ check:
 
 clean:
 	$(GO) clean
-	$(RM) $(basename $(commands))
+	$(RM) $(notdir $(commands))
 
-.PHONY: all build check clean
+fmt:
+	$(GO) fmt ./...
+
+.PHONY: all build check clean fmt

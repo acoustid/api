@@ -174,7 +174,8 @@ type memAtomicOutputFile struct {
 
 func (f *memAtomicOutputFile) Commit() error {
 	err := f.onCommit()
-	f.onCommit = func() error { return errCommitted
+	f.onCommit = func() error {
+		return errCommitted
 	}
 	return err
 }

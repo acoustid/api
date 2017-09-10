@@ -49,7 +49,7 @@ func PutSQLiteUvarint32(buf []byte, x uint32) int {
 		return 1
 	}
 	if x < 2292 {
-		buf[0] = byte((x - 244)/256 + 245)
+		buf[0] = byte((x-244)/256 + 245)
 		buf[1] = byte((x - 244) % 256)
 		return 2
 	}

@@ -6,13 +6,13 @@ package handlers
 import (
 	"fmt"
 	"github.com/acoustid/go-acoustid/chromaprint"
+	"github.com/pkg/errors"
 	"gopkg.in/mgo.v2"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"github.com/pkg/errors"
 	"time"
 )
 
