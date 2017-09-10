@@ -1,32 +1,18 @@
-image: $CI_REGISTRY_IMAGE/build-env
+image: golang:latest
+
 before_script:
   - mkdir -p $GOPATH/src/github.com/acoustid
   - ln -s $CI_PROJECT_DIR $GOPATH/src/github.com/acoustid/go-acoustid
   - cd $GOPATH/src/github.com/acoustid/go-acoustid/
 
 stages:
-  - prepare
   - test
   - build
-
-prepare build-env image:
-  stage: prepare
-  before_script: []
-  script:
-    - cd ci/build-env
-    - docker build -t $CI_REGISTRY_IMAGE/build-env .
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker push $CI_REGISTRY_IMAGE/build-env
-  tags:
-    - docker-host
-  only:
-    - master@acoustid/go-acoustid
 
 test:
   stage: test
   script:
-    - make check GO_TEST_FLAGS="-covermode=count -coverprofile=coverage.out"
-    - goveralls -coverprofile=coverage.out -service=gitlab -repotoken $COVERALLS_REPO_TOKEN
+    - make check
   tags:
     - docker
 

@@ -1,7 +1,6 @@
 all: build
 
 GO ?= go
-GO_TEST_FLAGS ?= -v
 
 commands = $(shell $(GO) list -f '{{.Name}}:{{.ImportPath}}' ./... | grep ^main: | sed s/^main://)
 
@@ -10,7 +9,7 @@ build:
 
 check:
 	$(GO) build ./...
-	$(GO) test $(GO_TEST_FLAGS) ./...
+	$(GO) test -v -cover ./...
 
 clean:
 	$(GO) clean
