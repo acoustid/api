@@ -1,3 +1,6 @@
+// Copyright (C) 2017  Lukas Lalinsky
+// Distributed under the MIT license, see the LICENSE file for details.
+
 package signal
 
 import (
