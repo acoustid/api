@@ -13,7 +13,7 @@ import (
 )
 
 func loadTestFingerprint(t *testing.T, name string) *Fingerprint {
-	data, err := ioutil.ReadFile(path.Join("test_data", name+".txt"))
+	data, err := ioutil.ReadFile(path.Join("..", "test_data", name+".txt"))
 	require.NoError(t, err)
 	fp, err := ParseFingerprintString(string(data))
 	require.NoError(t, err)
